@@ -2,6 +2,15 @@
 .env.local
 .env.*.local
 node_modules/
+mongo-test.js
+data/db.json
+data/*.pem
+data/od-proofs/
+data/od-verification-proofs/
+data/profile-images/
+data/student-documents/
+data/feed-media/
+certs/*.pem
 deployment/secrets/*
 !deployment/secrets/.gitkeep
 deployment/certs/*
