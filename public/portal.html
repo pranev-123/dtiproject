@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>REC — Access Portal | AI Attention System</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: linear-gradient(160deg, #f4f2fb 0%, #e8e4f5 40%, #faf8ff 100%);
+        color: #24135f;
+      }
+      .portal-wrap {
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+      .portal-header {
+        text-align: center;
+        margin-bottom: 22px;
+      }
+      .portal-header img {
+        height: 52px;
+        width: auto;
+        object-fit: contain;
+      }
+      .portal-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        margin: 12px 0 4px;
+      }
+      .portal-sub {
+        font-size: 0.82rem;
+        color: #6b6586;
+        line-height: 1.45;
+      }
+      .portal-ip-box {
+        margin: 16px 0;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(92, 46, 184, 0.2);
+        font-size: 11px;
+        color: #413563;
+        word-break: break-all;
+      }
+      .portal-ip-box strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #24135f;
+      }
+      /* Neon moving border wrapper */
+      .neon-portal-btn-wrap {
+        display: block;
+        margin: 14px 0;
+        padding: 3px;
+        border-radius: 16px;
+        background: linear-gradient(120deg, #d946ef, #06b6d4, #facc15, #a855f7, #d946ef);
+        background-size: 320% 100%;
+        animation: portalNeonMove 3.2s ease-in-out infinite;
+        box-shadow: 0 0 18px rgba(6, 182, 212, 0.25), 0 0 28px rgba(217, 70, 239, 0.15);
+        text-decoration: none;
+      }
+      .neon-portal-btn-wrap:hover {
+        filter: brightness(1.06);
+      }
+      @keyframes portalNeonMove {
+        0%,
+        100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+      }
+      .neon-portal-btn-inner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 16px 20px;
+        border-radius: 13px;
+        background: linear-gradient(180deg, #3d2b7d 0%, #1a0d3d 100%);
+        color: #fff !important;
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        position: relative;
+        overflow: hidden;
+      }
+      .neon-portal-btn-inner::before {
+        content: '';
+        position: absolute;
+        inset: -40%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.12),
+          rgba(6, 182, 212, 0.2),
+          transparent
+        );
+        transform: translateX(-60%);
+        animation: portalSweep 2.2s linear infinite;
+        pointer-events: none;
+      }
+      @keyframes portalSweep {
+        from {
+          transform: translateX(-60%);
+        }
+        to {
+          transform: translateX(60%);
+        }
+      }
+      .neon-portal-btn-inner span {
+        position: relative;
+        z-index: 1;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #5c2eb8;
+        margin: 22px 0 8px;
+      }
+      .hint-box {
+        font-size: 11px;
+        color: #6b6586;
+        line-height: 1.5;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255, 243, 205, 0.6);
+        border: 1px solid rgba(180, 140, 0, 0.25);
+        margin-top: 18px;
+      }
+      #portalFrameWrap {
+        margin-top: 18px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(92, 46, 184, 0.18);
+        background: #fff;
+        box-shadow: 0 16px 50px rgba(15, 9, 59, 0.15);
+      }
+
+      #portalFrameHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(92, 46, 184, 0.14);
+        background: linear-gradient(180deg, rgba(244, 242, 251, 1) 0%, rgba(232, 228, 245, 1) 100%);
+      }
+
+      #portalFrameTitle {
+        font-size: 12px;
+        font-weight: 800;
+        color: #24135f;
+        letter-spacing: 0.02em;
+      }
+
+      #portalCloseBtn {
+        border: 1px solid rgba(92, 46, 184, 0.25);
+        background: #fff;
+        color: #5c2eb8;
+        font-weight: 800;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+
+      #portalFrame {
+        width: 100%;
+        height: 74vh;
+        border: 0;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="portal-wrap">
+      <header class="portal-header">
+        <img src="/rec-logo.jpg" alt="Rajalakshmi Engineering College" onerror="this.style.display='none'" />
+        <div class="portal-title">AI Attention System — Access Portal</div>
+        <p class="portal-sub">
+          Rajalakshmi Engineering College (An Autonomous Institution). Open the correct login for your role using
+          <strong>this device’s server address</strong> so faculty, students, and leadership avoid wrong links.
+        </p>
+      </header>
+
+      <div class="portal-ip-box" id="portalServerInfo" aria-live="polite">
+        <strong>Detected server (use links below on this network)</strong>
+        <span id="portalOriginText">—</span>
+      </div>
+
+      <p class="section-label">Student</p>
+      <a class="neon-portal-btn-wrap" id="linkStudent" href="#">
+        <div class="neon-portal-btn-inner"><span>Student login</span></div>
+      </a>
+
+      <p class="section-label">Faculty</p>
+      <a class="neon-portal-btn-wrap" id="linkFaculty" href="#">
+        <div class="neon-portal-btn-inner"><span>Faculty login</span></div>
+      </a>
+
+      <p class="section-label">Leadership (Principal / Director / Dean / HoD / AHOD / VP)</p>
+      <a class="neon-portal-btn-wrap" id="linkLeadership" href="#">
+        <div class="neon-portal-btn-inner"><span>Leadership login</span></div>
+      </a>
+
+      <p class="section-label">Firewall (Network Access Dashboard)</p>
+      <a class="neon-portal-btn-wrap" id="linkFirewall" href="#">
+        <div class="neon-portal-btn-inner"><span>Firewall login</span></div>
+      </a>
+
+      <div id="httpsExtraSection" style="display: none">
+        <p class="section-label">Secure HTTPS (phones — camera &amp; attendance)</p>
+        <a class="neon-portal-btn-wrap" id="linkStudentHttps" href="#" style="margin-bottom: 8px">
+          <div class="neon-portal-btn-inner"><span>Student (HTTPS)</span></div>
+        </a>
+        <a class="neon-portal-btn-wrap" id="linkFacultyHttps" href="#" style="margin-bottom: 8px">
+          <div class="neon-portal-btn-inner"><span>Faculty (HTTPS)</span></div>
+        </a>
+        <a class="neon-portal-btn-wrap" id="linkLeadershipHttps" href="#">
+          <div class="neon-portal-btn-inner"><span>Leadership (HTTPS)</span></div>
+        </a>
+        <a class="neon-portal-btn-wrap" id="linkFirewallHttps" href="#" style="margin-bottom: 8px; margin-top: 10px;">
+          <div class="neon-portal-btn-inner"><span>Firewall login (HTTPS)</span></div>
+        </a>
+      </div>
+
+      <div class="hint-box" id="portalHint"></div>
+    </div>
+
+    <script>
+      (function () {
+        var origin = window.location.origin;
+        var host = window.location.hostname;
+        var proto = window.location.protocol;
+        var port = window.location.port;
+        var isLocal = host === 'localhost' || host === '127.0.0.1';
+
+        document.getElementById('portalOriginText').textContent = origin;
+
+        function setHref(id, path) {
+          var el = document.getElementById(id);
+          if (el) el.href = origin + path;
+        }
+
+        // Direct page routes (served without portal redirects).
+        setHref('linkStudent', '/_student-login');
+        setHref('linkFaculty', '/_login');
+        setHref('linkLeadership', '/_leadership-login');
+        setHref('linkFirewall', '/_firewall-login');
+
+        function wireNewTab(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.setAttribute('rel', 'noopener noreferrer');
+          el.setAttribute('target', '_blank');
+          el.addEventListener('click', function (ev) {
+            // Some in-app browsers ignore target=_blank, so force window.open.
+            ev.preventDefault();
+            try { window.open(el.href, '_blank', 'noopener'); } catch (_) { window.location.href = el.href; }
+          });
+        }
+
+        wireNewTab('linkStudent');
+        wireNewTab('linkFaculty');
+        wireNewTab('linkLeadership');
+        wireNewTab('linkFirewall');
+
+        wireNewTab('linkStudentHttps');
+        wireNewTab('linkFacultyHttps');
+        wireNewTab('linkLeadershipHttps');
+        wireNewTab('linkFirewallHttps');
+
+        // Allow server-side redirects to /portal?open=/some-path
+        // so users always land on the portal URL but the correct page opens in a new tab.
+        try {
+          var params = new URLSearchParams(window.location.search || '');
+          var openPath = String(params.get('open') || '').trim();
+          if (openPath && openPath.charAt(0) === '/' && openPath.indexOf('//') !== 0) {
+            var safe = openPath.split('?')[0].split('#')[0];
+            try { window.open(origin + safe, '_blank', 'noopener'); } catch (_) { /* ignore */ }
+            if (window.history && window.history.replaceState) {
+              window.history.replaceState({}, document.title, origin + '/portal');
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        var hintEl = document.getElementById('portalHint');
+        var httpsSection = document.getElementById('httpsExtraSection');
+
+        if (proto === 'http:' && !isLocal) {
+          try {
+            var u = new URL(origin);
+            u.protocol = 'https:';
+            if (!port || port === '3000' || port === '80') u.port = '3443';
+            var httpsOrigin = u.origin;
+            httpsSection.style.display = 'block';
+            document.getElementById('linkStudentHttps').href = httpsOrigin + '/_student-login';
+            document.getElementById('linkFacultyHttps').href = httpsOrigin + '/_login';
+            document.getElementById('linkLeadershipHttps').href = httpsOrigin + '/_leadership-login';
+            document.getElementById('linkFirewallHttps').href = httpsOrigin + '/_firewall-login';
+            if (hintEl) {
+              hintEl.innerHTML =
+                '<strong>Tip:</strong> On phones, camera and hand-raise attendance usually need <strong>HTTPS</strong>. If the buttons above fail, use the <strong>HTTPS</strong> row (port <strong>3443</strong> on this host). Accept the certificate warning if your college uses a self-signed cert. You can set <code>PUBLIC_HTTPS_URL</code> in server <code>.env</code> so registration emails include the exact HTTPS portal link.';
+            }
+          } catch (e) {
+            if (hintEl) hintEl.textContent = 'Use the same Wi‑Fi or VPN as the classroom server. If login fails, confirm the IP or hostname with your department.';
+          }
+        } else if (proto === 'https:') {
+          if (hintEl) {
+            hintEl.innerHTML =
+              'You are on a <strong>secure (HTTPS)</strong> connection — suitable for student camera and attendance on this device.';
+          }
+        } else {
+          if (hintEl) {
+            hintEl.textContent =
+              'On your laptop, HTTP on localhost is normal. For other PCs or phones on the LAN, use your server IP (e.g. http://192.168.x.x:3000/portal) or HTTPS on port 3443 if enabled.';
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

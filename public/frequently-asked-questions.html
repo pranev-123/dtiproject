@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>REC Frequently Asked Questions</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #4b5563;
+        --line: #e5e7eb;
+        --bg: #ffffff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(1000px 500px at -10% -20%, rgba(92, 46, 184, 0.12), transparent 60%),
+          radial-gradient(900px 500px at 110% 10%, rgba(37, 99, 235, 0.1), transparent 60%),
+          var(--bg);
+        color: var(--ink);
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+        position: relative;
+        overflow-x: hidden;
+      }
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        filter: blur(40px);
+        opacity: 0.22;
+        pointer-events: none;
+        z-index: 0;
+        animation: floatGlow 12s ease-in-out infinite;
+      }
+      body::before {
+        background: #7c3aed;
+        top: 8%;
+        left: -80px;
+      }
+      body::after {
+        background: #2563eb;
+        right: -90px;
+        top: 46%;
+        animation-delay: 2s;
+      }
+      @keyframes floatGlow {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-22px) scale(1.08); }
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 16px 20px 36px;
+        position: relative;
+        z-index: 1;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 10px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .brand img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+      }
+      .brand-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .brand-sub {
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .nav-links a,
+      .nav-links button {
+        font-size: 12px;
+        color: #fff;
+        text-decoration: none;
+        margin-left: 10px;
+        background: linear-gradient(120deg, #5c2eb8, #2563eb);
+        border-radius: 999px;
+        padding: 8px 12px;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.24);
+        border: none;
+        cursor: pointer;
+      }
+      .quick-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
+        margin: 8px 0 16px;
+      }
+      .quick-links a {
+        font-size: 12px;
+        color: #1f2937;
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+      .quick-links a:hover {
+        transform: translateY(-2px);
+        border-color: #c7d2fe;
+        box-shadow: 0 6px 16px rgba(17, 24, 39, 0.12);
+      }
+      .faq-section {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+        position: relative;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .faq-section::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        border: 1px solid transparent;
+        background: linear-gradient(130deg, rgba(92, 46, 184, 0.25), rgba(37, 99, 235, 0.2)) border-box;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) padding-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask:
+          linear-gradient(#fff 0 0) padding-box,
+          linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        pointer-events: none;
+      }
+      .faq-section:hover {
+        transform: translateY(-3px);
+        border-color: #c7d2fe;
+        box-shadow: 0 12px 28px rgba(17, 24, 39, 0.12), 0 0 16px rgba(92, 46, 184, 0.18);
+      }
+      .faq-section h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+      .q {
+        margin-top: 10px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .a {
+        margin-top: 4px;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      footer {
+        margin-top: 24px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+      }
+      .faq-ai-launcher {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 30;
+        border: none;
+        cursor: pointer;
+        border-radius: 999px;
+        padding: 12px 16px;
+        color: #fff;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        background: linear-gradient(120deg, #5c2eb8, #2563eb);
+        box-shadow: 0 8px 26px rgba(17, 24, 39, 0.25);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .faq-ai-launcher-logo {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+      }
+      .faq-ai-launcher::before {
+        content: "";
+        position: absolute;
+        inset: -3px;
+        border-radius: inherit;
+        background: conic-gradient(from 0deg, #22d3ee, #a855f7, #f472b6, #22d3ee);
+        z-index: -1;
+        filter: blur(6px);
+        opacity: 0.95;
+        animation: neonRotate 2.2s linear infinite;
+      }
+      @keyframes neonRotate {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .faq-ai-panel {
+        position: fixed;
+        right: 20px;
+        bottom: 84px;
+        width: 360px;
+        max-width: calc(100vw - 24px);
+        height: 500px;
+        background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+        border: 1px solid #c7d2fe;
+        border-radius: 16px;
+        box-shadow: 0 18px 36px rgba(17, 24, 39, 0.2), 0 0 18px rgba(92, 46, 184, 0.24);
+        overflow: hidden;
+        display: none;
+        z-index: 31;
+      }
+      .faq-ai-panel.open { display: grid; grid-template-rows: auto 1fr auto; }
+      .faq-ai-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid #e5e7eb;
+        background: linear-gradient(120deg, rgba(92, 46, 184, 0.12), rgba(37, 99, 235, 0.12));
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .faq-ai-head-logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(99, 102, 241, 0.32);
+        flex: 0 0 auto;
+      }
+      .faq-ai-head-text {
+        min-width: 0;
+      }
+      .faq-ai-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 800;
+        color: #111827;
+      }
+      .faq-ai-sub {
+        margin: 4px 0 0;
+        font-size: 11px;
+        color: #4b5563;
+      }
+      .faq-ai-log {
+        padding: 12px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .faq-ai-msg {
+        max-width: 92%;
+        padding: 9px 11px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+      .faq-ai-msg.user {
+        align-self: flex-end;
+        background: #1d4ed8;
+        color: #fff;
+      }
+      .faq-ai-msg.bot {
+        align-self: flex-start;
+        background: #eef2ff;
+        color: #1f2937;
+        border: 1px solid #c7d2fe;
+      }
+      .faq-ai-controls {
+        border-top: 1px solid #e5e7eb;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        align-items: center;
+      }
+      .faq-ai-input {
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        padding: 9px 10px;
+        font-size: 13px;
+      }
+      .faq-ai-btn {
+        border: none;
+        border-radius: 10px;
+        padding: 9px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(120deg, #5c2eb8, #2563eb);
+        cursor: pointer;
+      }
+      .faq-ai-btn.voice {
+        background: linear-gradient(120deg, #0f766e, #2563eb);
+      }
+      /* Faculty-style camera controls card (local demo preview on FAQ) */
+      .faq-camera-controls-card {
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 14px;
+        background: #f7f6ff;
+        border: 1px solid rgba(36, 19, 95, 0.1);
+      }
+      .faq-camera-controls-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #413563;
+        margin-bottom: 10px;
+      }
+      .faq-camera-stage-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 420px;
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        background: #000;
+        border-radius: 12px;
+        margin-bottom: 12px;
+      }
+      .faq-camera-stage-wrap video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform-origin: 50% 50%;
+        will-change: transform;
+        transition: transform 0.18s ease-out;
+      }
+      .faq-camera-stage-wrap video.faq-zoom-instant {
+        transition: none;
+      }
+      .faq-camera-demo-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .faq-camera-demo-btns button {
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        color: #fff;
+        background: linear-gradient(120deg, #5c2eb8, #2563eb);
+      }
+      .faq-camera-demo-btns button.secondary-faq-cam {
+        background: #64748b;
+      }
+      .faq-camera-controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+        margin-bottom: 8px;
+      }
+      .faq-camera-controls-row label {
+        font-size: 12px;
+        color: #413563;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .faq-camera-controls-row input[type="range"] {
+        width: min(240px, 100%);
+        accent-color: #5c2eb8;
+      }
+      .faq-camera-reset {
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 10px;
+        border: 1px solid rgba(92, 46, 184, 0.35);
+        background: #fff;
+        color: #24135f;
+        cursor: pointer;
+      }
+      .faq-camera-reset:hover {
+        border-color: #5c2eb8;
+      }
+      #faqCameraDemoStatus {
+        font-size: 11px;
+        color: #6b6586;
+        line-height: 1.45;
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="topbar">
+        <div class="brand">
+          <img src="/rec-logo.jpg" alt="REC Logo" />
+          <div>
+            <div class="brand-title">Rajalakshmi Engineering college ( An Autonomous Institution)</div>
+            <div class="brand-sub">Frequently asked question</div>
+          </div>
+        </div>
+        <div class="nav-links">
+          <a href="/help-center">Help Center</a>
+          <a href="/frequently-asked-questions">FAQs</a>
+          <button type="button" id="btnBackDashboardFaq">Back to Dashboard</button>
+        </div>
+      </header>
+
+      <nav class="quick-links" aria-label="FAQ topic shortcuts">
+        <a href="#account-login-otp">Account, login and OTP</a>
+        <a href="#camera-live-streaming">Camera and live streaming</a>
+        <a href="#faq-camera-controls">Camera controls (demo)</a>
+        <a href="#attendance-rules">Attendance rules</a>
+        <a href="#ai-attention-pulse">AI attention and pulse</a>
+        <a href="#class-engagement-map">Class engagement map</a>
+        <a href="#security-privacy">Security and privacy</a>
+        <a href="#faculty-voice-commands">Faculty voice commands</a>
+      </nav>
+
+      <section class="faq-section" id="account-login-otp">
+        <h2>Account, login and OTP</h2>
+        <div class="q">Q: Does the project use two-step verification?</div>
+        <div class="a">A: Yes. Faculty, Student, and Leadership logins require password plus email OTP verification.</div>
+        <div class="q">Q: What if OTP does not arrive?</div>
+        <div class="a">A: Check spam/junk, verify SMTP settings on the server, then use OTP resend on the login page.</div>
+      </section>
+
+      <section class="faq-section" id="camera-live-streaming">
+        <h2>Camera and live streaming</h2>
+        <div class="q">Q: Why is the camera preview black?</div>
+        <div class="a">A: Grant browser camera permission, ensure no other app is locking the camera, and refresh the page once.</div>
+        <div class="q">Q: Why is student stream not visible in faculty dashboard?</div>
+        <div class="a">A: Start camera on student page, then start streaming; ensure faculty dashboard is online and session is active.</div>
+      </section>
+
+      <section class="faq-section" id="faq-camera-controls">
+        <h2>Camera controls (faculty dashboard — interactive demo)</h2>
+        <p class="a" style="margin:0 0 8px;">
+          The faculty dashboard uses the same layout for the <strong>student live stream</strong>: digital zoom, optional <strong>auto face zoom</strong> (runs only in your browser), and <strong>reset view</strong>. Use your own camera below to try it. Nothing is recorded or sent to the server from this demo.
+        </p>
+        <div class="faq-camera-controls-card">
+          <div class="faq-camera-controls-title">Camera view — zoom &amp; auto framing (same controls as faculty)</div>
+          <div class="faq-camera-stage-wrap" id="faqCameraStage">
+            <video id="faqDemoVideo" playsinline muted autoplay></video>
+          </div>
+          <div class="faq-camera-demo-btns">
+            <button type="button" id="faqCameraStartBtn">Start camera preview</button>
+            <button type="button" class="secondary-faq-cam" id="faqCameraStopBtn" disabled>Stop camera</button>
+          </div>
+          <div class="faq-camera-controls-row">
+            <label>
+              <input type="checkbox" id="faqAutoZoomCb" checked />
+              Auto face zoom
+            </label>
+            <button type="button" class="faq-camera-reset" id="faqZoomResetBtn">Reset view</button>
+          </div>
+          <div class="faq-camera-controls-row">
+            <label for="faqZoomRange">Manual zoom <span id="faqZoomPct">100%</span></label>
+            <input type="range" id="faqZoomRange" min="100" max="300" value="100" />
+          </div>
+          <p id="faqCameraDemoStatus">Tap “Start camera preview” to enable controls. On the real faculty page, these apply to the student’s live video.</p>
+        </div>
+      </section>
+
+      <section class="faq-section" id="attendance-rules">
+        <h2>Attendance rules</h2>
+        <div class="q">Q: Why was attendance marked absent?</div>
+        <div class="a">A: Attendance considers hand raise / attention / face presence windows. If required checks are not met within the window, status becomes absent.</div>
+        <div class="q">Q: Can attendance be restricted to campus only?</div>
+        <div class="a">A: Yes. Enable campus CIDR enforcement via environment configuration on the backend.</div>
+      </section>
+
+      <section class="faq-section" id="ai-attention-pulse">
+        <h2>AI attention and pulse</h2>
+        <div class="q">Q: How is attention score generated?</div>
+        <div class="a">A: The student page computes gaze/posture-based score locally and sends only anonymized numeric attention signals.</div>
+        <div class="q">Q: Why is pulse not updating?</div>
+        <div class="a">A: Ensure there is an active session, a student stream is running, and faculty dashboard has selected the active session.</div>
+      </section>
+
+      <section class="faq-section" id="class-engagement-map">
+        <h2>Class engagement map</h2>
+        <div class="q">Q: What does the map represent?</div>
+        <div class="a">A: It is a zone-wise classroom engagement heatmap (front/middle/back zones) based on recent attention trends.</div>
+      </section>
+
+      <section class="faq-section" id="security-privacy">
+        <h2>Security and privacy</h2>
+        <div class="q">Q: Is data protected?</div>
+        <div class="a">A: The system uses session security, password hashing, OTP verification, route rate limits, and optional HTTPS deployment hardening.</div>
+        <div class="q">Q: Are credentials exposed in UI?</div>
+        <div class="a">A: No. Credentials are handled server-side and OTP is time-limited for verification.</div>
+      </section>
+
+      <section class="faq-section" id="faculty-voice-commands">
+        <h2>Faculty dashboard — REC Smart Assist voice commands</h2>
+        <div class="q">Q: How do I use voice on the faculty dashboard?</div>
+        <div class="a">A: Click the microphone button (bottom-right) or say a wake phrase such as “REC Smart Assist”, then speak your command in English. Recognition runs in the browser; nothing is sent to the server as voice audio.</div>
+        <div class="q">Q: What commands are supported?</div>
+        <div class="a">A: Examples — Open or close REC Smart Assist chat; open FAQs in a new tab; show notifications or innovation highlights; scroll to attendance or session details; refresh active sessions; start or end session (same as the dashboard buttons); refresh AI agent or attendance table; read attention / pulse; focus front, middle, or back row (camera hints); hardware zoom camera; student stream digital zoom: “zoom in”, “zoom out”, “reset view”, “auto face zoom” / “auto face zoom off”; confusion zone hints. Anything else is answered by the AI assistant when possible.</div>
+        <div class="q">Q: Does voice work in every browser?</div>
+        <div class="a">A: Use a current Chromium-based browser (Chrome or Edge) for best speech recognition. Allow microphone permission when prompted.</div>
+      </section>
+
+      <footer>2026 Rajalakshmi Engineering College ( An Autonomous Institution)</footer>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <button id="faqAiLauncher" class="faq-ai-launcher" type="button">
+      <img src="/aadhi-rec.jpg" alt="Chatbot logo" class="faq-ai-launcher-logo" />
+      REC FAQ Chatbot
+    </button>
+    <section id="faqAiPanel" class="faq-ai-panel" aria-label="REC FAQ AI assistant">
+      <header class="faq-ai-head">
+        <img src="/aadhi-rec.jpg" alt="REC FAQ chatbot logo" class="faq-ai-head-logo" />
+        <div class="faq-ai-head-text">
+          <p class="faq-ai-title">REC FAQ Chatbot + Rec Assisst</p>
+          <p class="faq-ai-sub">Powered by Claude Opus and Gemini 3.1 Flash</p>
+        </div>
+      </header>
+      <div id="faqAiLog" class="faq-ai-log">
+        <div class="faq-ai-msg bot">Hi, I am Rec Assisst. Ask me any FAQ or dashboard question.</div>
+      </div>
+      <div class="faq-ai-controls">
+        <input id="faqAiInput" class="faq-ai-input" type="text" placeholder="Ask anything..." />
+        <button id="faqAiVoiceBtn" class="faq-ai-btn voice" type="button">Voice</button>
+        <button id="faqAiSendBtn" class="faq-ai-btn" type="button">Send</button>
+      </div>
+    </section>
+    <script>
+      (function () {
+        const btn = document.getElementById('btnBackDashboardFaq');
+        if (!btn) return;
+        btn.addEventListener('click', async function () {
+          try {
+            const res = await fetch('/api/dashboard-role', { credentials: 'include', headers: { Accept: 'application/json' } });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data && data.ok && data.dashboardPath) {
+              window.location.href = String(data.dashboardPath);
+              return;
+            }
+          } catch (_) {}
+          window.location.href = '/login';
+        });
+      })();
+
+      (function () {
+        const faqDemoVideo = document.getElementById('faqDemoVideo');
+        const faqCameraStartBtn = document.getElementById('faqCameraStartBtn');
+        const faqCameraStopBtn = document.getElementById('faqCameraStopBtn');
+        const faqAutoZoomCb = document.getElementById('faqAutoZoomCb');
+        const faqZoomRange = document.getElementById('faqZoomRange');
+        const faqZoomPct = document.getElementById('faqZoomPct');
+        const faqZoomResetBtn = document.getElementById('faqZoomResetBtn');
+        const faqCameraDemoStatus = document.getElementById('faqCameraDemoStatus');
+        if (!faqDemoVideo || !faqCameraStartBtn || !faqCameraStopBtn || !faqAutoZoomCb || !faqZoomRange || !faqZoomPct || !faqZoomResetBtn) return;
+
+        const MODEL_BASE = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+        let faqDemoStream = null;
+        let faqFaceReady = false;
+        let faqFaceLoading = null;
+        let faqAutoZoomRaf = 0;
+        let faqAutoZoomLastDetect = 0;
+        const faqZoomSmooth = { ox: 50, oy: 50, scale: 1 };
+        let faqManualZoomOverride = false;
+
+        function setFaqCamStatus(text) {
+          if (faqCameraDemoStatus) faqCameraDemoStatus.textContent = text;
+        }
+
+        async function ensureFaqFaceDetector() {
+          if (faqFaceReady) return true;
+          if (typeof faceapi === 'undefined' || !faceapi.nets || !faceapi.nets.tinyFaceDetector) {
+            setFaqCamStatus('Face detection library failed to load. Use manual zoom only.');
+            return false;
+          }
+          if (faqFaceLoading) return faqFaceLoading;
+          faqFaceLoading = (async () => {
+            try {
+              setFaqCamStatus('Loading face detector for auto zoom…');
+              await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_BASE);
+              faqFaceReady = true;
+              setFaqCamStatus('Auto face zoom ready (local only).');
+              return true;
+            } catch (e) {
+              console.warn('FAQ demo face models', e);
+              setFaqCamStatus('Could not load face detector. Manual zoom still works.');
+              return false;
+            } finally {
+              faqFaceLoading = null;
+            }
+          })();
+          return faqFaceLoading;
+        }
+
+        function stopFaqAutoZoomLoop() {
+          if (faqAutoZoomRaf) {
+            cancelAnimationFrame(faqAutoZoomRaf);
+            faqAutoZoomRaf = 0;
+          }
+        }
+
+        function applyFaqDemoTransform(ox, oy, scale, instant) {
+          const s = Math.min(3, Math.max(1, Number(scale) || 1));
+          const x = Math.min(100, Math.max(0, Number(ox) || 50));
+          const y = Math.min(100, Math.max(0, Number(oy) || 50));
+          faqDemoVideo.style.transformOrigin = x + '% ' + y + '%';
+          faqDemoVideo.style.transform = 'scale(' + s + ')';
+          if (instant) {
+            faqDemoVideo.classList.add('faq-zoom-instant');
+            requestAnimationFrame(function () { faqDemoVideo.classList.remove('faq-zoom-instant'); });
+          }
+        }
+
+        function resetFaqDemoView() {
+          faqManualZoomOverride = false;
+          faqZoomSmooth.ox = 50;
+          faqZoomSmooth.oy = 50;
+          faqZoomSmooth.scale = 1;
+          faqZoomRange.value = '100';
+          faqZoomPct.textContent = '100%';
+          applyFaqDemoTransform(50, 50, 1, true);
+          if (faqAutoZoomCb) faqAutoZoomCb.checked = true;
+        }
+
+        function faqAutoZoomFrame() {
+          faqAutoZoomRaf = 0;
+          if (!faqAutoZoomCb || !faqAutoZoomCb.checked || faqManualZoomOverride || !faqDemoStream) return;
+
+          const scheduleNext = function () {
+            if (faqAutoZoomCb && faqAutoZoomCb.checked && !faqManualZoomOverride && faqDemoStream) {
+              faqAutoZoomRaf = requestAnimationFrame(faqAutoZoomFrame);
+            }
+          };
+
+          void (async function () {
+            const now = performance.now();
+            if (now - faqAutoZoomLastDetect > 220) {
+              faqAutoZoomLastDetect = now;
+              if (faqDemoVideo.readyState >= 2 && faqDemoVideo.videoWidth > 0 && faqFaceReady) {
+                try {
+                  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 });
+                  const det = await faceapi.detectSingleFace(faqDemoVideo, opts);
+                  if (det) {
+                    const box = det.box;
+                    const vw = faqDemoVideo.videoWidth;
+                    const vh = faqDemoVideo.videoHeight;
+                    const tcx = (box.x + box.width / 2) / vw * 100;
+                    const tcy = (box.y + box.height / 2) / vh * 100;
+                    const faceRatio = box.width / vw;
+                    const targetScale = Math.min(2.85, Math.max(1.12, 0.42 / Math.max(faceRatio, 0.07)));
+                    const lerp = 0.22;
+                    faqZoomSmooth.ox += (tcx - faqZoomSmooth.ox) * lerp;
+                    faqZoomSmooth.oy += (tcy - faqZoomSmooth.oy) * lerp;
+                    faqZoomSmooth.scale += (targetScale - faqZoomSmooth.scale) * lerp;
+                    faqZoomRange.value = String(Math.round(faqZoomSmooth.scale * 100));
+                    faqZoomPct.textContent = Math.round(faqZoomSmooth.scale * 100) + '%';
+                    applyFaqDemoTransform(faqZoomSmooth.ox, faqZoomSmooth.oy, faqZoomSmooth.scale, false);
+                  } else {
+                    faqZoomSmooth.ox += (50 - faqZoomSmooth.ox) * 0.12;
+                    faqZoomSmooth.oy += (50 - faqZoomSmooth.oy) * 0.12;
+                    faqZoomSmooth.scale += (1.08 - faqZoomSmooth.scale) * 0.12;
+                    faqZoomRange.value = String(Math.round(faqZoomSmooth.scale * 100));
+                    faqZoomPct.textContent = Math.round(faqZoomSmooth.scale * 100) + '%';
+                    applyFaqDemoTransform(faqZoomSmooth.ox, faqZoomSmooth.oy, faqZoomSmooth.scale, false);
+                  }
+                } catch (e) {
+                  console.warn('FAQ auto-zoom', e);
+                }
+              }
+            } else if (faqDemoVideo.readyState >= 2) {
+              applyFaqDemoTransform(faqZoomSmooth.ox, faqZoomSmooth.oy, faqZoomSmooth.scale, false);
+            }
+            scheduleNext();
+          })();
+        }
+
+        function startFaqAutoZoomLoop() {
+          stopFaqAutoZoomLoop();
+          if (!faqAutoZoomCb || !faqAutoZoomCb.checked || faqManualZoomOverride || !faqDemoStream) return;
+          ensureFaqFaceDetector().then(function (ok) {
+            if (ok && faqAutoZoomCb && faqAutoZoomCb.checked && !faqManualZoomOverride && faqDemoStream) {
+              faqAutoZoomLastDetect = 0;
+              faqAutoZoomRaf = requestAnimationFrame(faqAutoZoomFrame);
+            }
+          });
+        }
+
+        faqZoomRange.addEventListener('input', function () {
+          faqManualZoomOverride = true;
+          if (faqAutoZoomCb) faqAutoZoomCb.checked = false;
+          stopFaqAutoZoomLoop();
+          const pct = parseInt(faqZoomRange.value, 10) || 100;
+          faqZoomPct.textContent = pct + '%';
+          const s = pct / 100;
+          faqZoomSmooth.ox = 50;
+          faqZoomSmooth.oy = 50;
+          faqZoomSmooth.scale = s;
+          applyFaqDemoTransform(50, 50, s, false);
+          setFaqCamStatus('Manual zoom. Turn auto face zoom back on to follow your face.');
+        });
+
+        faqAutoZoomCb.addEventListener('change', function () {
+          if (faqAutoZoomCb.checked) {
+            faqManualZoomOverride = false;
+            startFaqAutoZoomLoop();
+            setFaqCamStatus('Auto face zoom on.');
+          } else {
+            stopFaqAutoZoomLoop();
+            setFaqCamStatus('Auto zoom off. Drag the slider for manual zoom.');
+          }
+        });
+
+        faqZoomResetBtn.addEventListener('click', function () {
+          faqManualZoomOverride = false;
+          if (faqAutoZoomCb) faqAutoZoomCb.checked = true;
+          resetFaqDemoView();
+          if (faqDemoStream) startFaqAutoZoomLoop();
+          setFaqCamStatus('View reset. Auto face zoom on.');
+        });
+
+        faqCameraStartBtn.addEventListener('click', async function () {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setFaqCamStatus('Camera API not supported in this browser.');
+            return;
+          }
+          try {
+            if (faqDemoStream) {
+              faqDemoStream.getTracks().forEach(function (t) { t.stop(); });
+              faqDemoStream = null;
+            }
+            stopFaqAutoZoomLoop();
+            faqDemoStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+            faqDemoVideo.srcObject = faqDemoStream;
+            try { await faqDemoVideo.play(); } catch (_) {}
+            faqManualZoomOverride = false;
+            resetFaqDemoView();
+            faqCameraStartBtn.disabled = true;
+            faqCameraStopBtn.disabled = false;
+            setFaqCamStatus('Preview running. Same zoom behaviour as the faculty student camera panel.');
+            ensureFaqFaceDetector().then(function () { startFaqAutoZoomLoop(); });
+          } catch (e) {
+            console.warn('FAQ camera', e);
+            setFaqCamStatus('Could not access camera. Allow permission and use HTTPS or localhost.');
+          }
+        });
+
+        faqCameraStopBtn.addEventListener('click', function () {
+          stopFaqAutoZoomLoop();
+          if (faqDemoStream) {
+            faqDemoStream.getTracks().forEach(function (t) { t.stop(); });
+            faqDemoStream = null;
+          }
+          faqDemoVideo.srcObject = null;
+          faqDemoVideo.style.transform = '';
+          faqDemoVideo.style.transformOrigin = '';
+          faqManualZoomOverride = false;
+          faqZoomRange.value = '100';
+          faqZoomPct.textContent = '100%';
+          if (faqAutoZoomCb) faqAutoZoomCb.checked = true;
+          faqCameraStartBtn.disabled = false;
+          faqCameraStopBtn.disabled = true;
+          setFaqCamStatus('Camera stopped. On the faculty dashboard, zoom applies to the student live stream.');
+        });
+      })();
+
+      (function () {
+        const launcher = document.getElementById('faqAiLauncher');
+        const panel = document.getElementById('faqAiPanel');
+        const log = document.getElementById('faqAiLog');
+        const input = document.getElementById('faqAiInput');
+        const sendBtn = document.getElementById('faqAiSendBtn');
+        const voiceBtn = document.getElementById('faqAiVoiceBtn');
+        if (!launcher || !panel || !log || !input || !sendBtn || !voiceBtn) return;
+
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = SR ? new SR() : null;
+        if (recognition) {
+          recognition.lang = 'en-IN';
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+        } else {
+          voiceBtn.disabled = true;
+          voiceBtn.title = 'Voice input is not supported in this browser.';
+        }
+
+        function addMsg(kind, text) {
+          const bubble = document.createElement('div');
+          bubble.className = 'faq-ai-msg ' + kind;
+          bubble.textContent = text;
+          log.appendChild(bubble);
+          log.scrollTop = log.scrollHeight;
+          return bubble;
+        }
+
+        let preferredFemaleVoice = null;
+        let greetedOnce = false;
+
+        function resolveFemaleVoice() {
+          if (!('speechSynthesis' in window)) return null;
+          const voices = window.speechSynthesis.getVoices() || [];
+          if (!voices.length) return null;
+          const preferred = voices.find((v) => /female|zira|susan|samantha|karen|aria|jenny|zira/i.test(String(v.name || '')));
+          return preferred || voices.find((v) => /en[-_](in|us|gb)/i.test(String(v.lang || ''))) || voices[0] || null;
+        }
+
+        preferredFemaleVoice = resolveFemaleVoice();
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.onvoiceschanged = function () {
+            preferredFemaleVoice = resolveFemaleVoice();
+          };
+        }
+
+        function speak(text) {
+          if (!('speechSynthesis' in window)) return;
+          const utter = new SpeechSynthesisUtterance(String(text || '').slice(0, 500));
+          utter.rate = 1;
+          utter.pitch = 1;
+          if (preferredFemaleVoice) utter.voice = preferredFemaleVoice;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        }
+
+        async function sendChatMessage(message) {
+          const text = String(message || '').trim();
+          if (!text) return;
+          addMsg('user', text);
+          input.value = '';
+          const wait = addMsg('bot', 'Thinking...');
+          try {
+            const res = await fetch('/api/ai/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({
+                message: text,
+                context: 'student',
+                model: 'auto',
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            const reply = data && (data.reply || data.text || data.message)
+              ? String(data.reply || data.text || data.message)
+              : 'I could not answer right now. Please try again.';
+            wait.textContent = reply;
+            speak(reply);
+          } catch (_) {
+            wait.textContent = 'Network issue while contacting AI service. Please try again.';
+          }
+        }
+
+        launcher.addEventListener('click', function () {
+          panel.classList.toggle('open');
+          if (panel.classList.contains('open')) {
+            input.focus();
+            if (!greetedOnce) {
+              speak('Hello I am rec assisst, how can I help you today');
+              greetedOnce = true;
+            }
+          }
+        });
+        sendBtn.addEventListener('click', function () {
+          sendChatMessage(input.value);
+        });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') sendChatMessage(input.value);
+        });
+        voiceBtn.addEventListener('click', function () {
+          if (!recognition) return;
+          voiceBtn.textContent = 'Listening...';
+          recognition.start();
+        });
+        if (recognition) {
+          recognition.onresult = function (event) {
+            const text = event && event.results && event.results[0] && event.results[0][0]
+              ? event.results[0][0].transcript
+              : '';
+            input.value = text || '';
+            voiceBtn.textContent = 'Voice';
+            if (text) sendChatMessage(text);
+          };
+          recognition.onerror = function () {
+            voiceBtn.textContent = 'Voice';
+          };
+          recognition.onend = function () {
+            voiceBtn.textContent = 'Voice';
+          };
+        }
+      })();
+    </script>
+  </body>
+</html>

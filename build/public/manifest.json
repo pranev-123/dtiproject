@@ -1,0 +1,14 @@
+{
+  "name": "REC Classroom Attention - Faculty Dashboard",
+  "short_name": "REC Faculty",
+  "description": "AI-based Classroom Attention System - Faculty Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f4ff",
+  "theme_color": "#24135f",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/rec-logo.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "/rec-logo.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" }
+  ]
+}

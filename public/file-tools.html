@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>REC File Converter & Merger</title>
+  <style>
+    :root { --bg:#0f1028; --card:#171a3b; --text:#f7f8ff; --muted:#413563; --neon1:#00f5ff; --neon2:#ff4dff; --ok:#35d07f; --err:#ff6b6b; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:#ffffff; color:#24135f; }
+    .leader-header {
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      align-items:center;
+      padding:12px 24px;
+      background:#ffffff;
+      border-bottom:1px solid rgba(36, 19, 95, 0.08);
+    }
+    .leader-header-left { display:flex; align-items:center; gap:14px; }
+    .leader-logo { height:56px; width:auto; object-fit:contain; }
+    .leader-header-center { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+    .title {
+      font-size:17px;
+      font-weight:700;
+      margin:0;
+      text-align:center;
+      color:#24135f;
+      position:relative;
+      text-shadow: 0 0 8px rgba(96, 65, 185, 0.25);
+      overflow:hidden;
+    }
+    .title::after {
+      content:"";
+      position:absolute;
+      top:-50%;
+      left:-70%;
+      width:45%;
+      height:200%;
+      pointer-events:none;
+      transform:skewX(-22deg);
+      background:linear-gradient(120deg, transparent 0%, rgba(0,245,255,0.5) 45%, rgba(255,77,255,0.5) 55%, transparent 100%);
+      animation:titleNeonSweep 2.4s linear infinite;
+    }
+    @keyframes titleNeonSweep { from { left:-70%; } to { left:130%; } }
+    .subhead { text-align:center; color:#6b6586; font-size:12px; margin:2px 0 0; }
+    .leader-header-right { min-width:56px; }
+    .wrap { max-width:1100px; margin:12px auto; padding:0 14px 20px; }
+    .hint { color:var(--muted); font-size:13px; margin-bottom:10px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+    .card { background:var(--card); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,0.35); color:#f7f8ff; }
+    .card h3 { margin:0 0 8px; font-size:16px; color:#f7f8ff; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+    input[type="file"] { width:100%; color:#f7f8ff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.16); border-radius:8px; padding:4px; }
+    .status { min-height:18px; font-size:12px; color:#c9cff8; margin-top:6px; }
+    .btn {
+      border:1px solid rgba(255,255,255,0.25); color:#fff; background:linear-gradient(90deg,#2f357f,#7c37a5);
+      padding:8px 12px; border-radius:999px; cursor:pointer; font-weight:700; position:relative; overflow:hidden;
+    }
+    .btn::before {
+      content:""; position:absolute; top:-40%; left:-70%; width:60%; height:180%;
+      background:linear-gradient(120deg,transparent 0%, rgba(0,245,255,0.65) 45%, rgba(255,77,255,0.65) 55%, transparent 100%);
+      transform:skewX(-20deg); animation:move 2.2s linear infinite;
+    }
+    @keyframes move { from { left:-70%; } to { left:130%; } }
+    .btn.secondary { background:#2a2d57; }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; }
+    /* REC Buddy chatbot */
+    .buddy-fab {
+      position: fixed; right: 18px; bottom: 18px; z-index: 90;
+      width: 72px; height: 72px; border-radius: 999px; border: 2px solid rgba(92,46,184,0.45);
+      background: #fff; box-shadow: 0 14px 30px rgba(36,19,95,0.28); cursor: pointer;
+      display:flex; align-items:center; justify-content:center; overflow:hidden;
+    }
+    .buddy-fab img { width: 100%; height: 100%; object-fit: cover; }
+    .buddy-bubble {
+      position: fixed; right: 98px; bottom: 58px; z-index: 90;
+      background:#24135f; color:#fff; font-size:12px; border-radius:999px; padding:8px 12px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.24);
+    }
+    .buddy-panel {
+      position: fixed; right: 18px; bottom: 102px; width: min(92vw, 380px); max-height: 70vh; z-index: 95;
+      background:#fff; border:1px solid rgba(36,19,95,0.12); border-radius:16px; display:none; overflow:hidden;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.28);
+    }
+    .buddy-panel.open { display:block; }
+    .buddy-head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#24135f; color:#fff; }
+    .buddy-close { border:none; background:transparent; color:#fff; font-size:20px; cursor:pointer; }
+    .buddy-faq { padding:8px 10px; border-bottom:1px solid #ecebfa; display:flex; flex-wrap:wrap; gap:6px; }
+    .buddy-faq button { border:1px solid #d5d2ef; background:#f6f4ff; color:#24135f; border-radius:999px; font-size:11px; padding:5px 8px; cursor:pointer; }
+    .buddy-body { height:240px; overflow:auto; padding:10px; background:#fbfbff; }
+    .buddy-msg { font-size:13px; line-height:1.35; margin:7px 0; padding:8px 10px; border-radius:10px; max-width:90%; }
+    .buddy-msg.user { margin-left:auto; background:#e7defd; color:#24135f; }
+    .buddy-msg.bot { margin-right:auto; background:#eff5ff; color:#132a56; }
+    .buddy-foot { display:flex; gap:6px; padding:10px; border-top:1px solid #ecebfa; }
+    .buddy-foot input { flex:1; border:1px solid #d7d4ef; border-radius:999px; padding:8px 12px; }
+    .buddy-voice {
+      border:1px solid rgba(92,46,184,0.28); background:#fff; color:#24135f; border-radius:999px; padding:7px 10px; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+  <header class="leader-header">
+    <div class="leader-header-left">
+      <img src="/rec-logo.jpg" alt="Rajalakshmi Engineering College logo" class="leader-logo" />
+    </div>
+    <div class="leader-header-center">
+      <div class="title">Rajalakshmi Engineering College (An Autonomous Institution)</div>
+      <div class="subhead">All in one file converter</div>
+    </div>
+    <div class="leader-header-right"></div>
+  </header>
+  <div class="wrap">
+    <div class="hint">Supports DOCX↔PDF, PDF↔Image, Image↔PDF, DOCX merge, PDF merge, and image merge. Every tool includes download output.</div>
+    <div class="grid">
+      <div class="card">
+        <h3>DOCX to PDF</h3>
+        <input type="file" id="docxToPdfInput" accept=".docx" />
+        <div class="row"><button class="btn" id="docxToPdfBtn">Convert + Download PDF</button></div>
+        <div class="status" id="docxToPdfStatus"></div>
+      </div>
+      <div class="card">
+        <h3>PDF to DOCX</h3>
+        <input type="file" id="pdfToDocxInput" accept=".pdf,application/pdf" />
+        <div class="row"><button class="btn" id="pdfToDocxBtn">Convert + Download DOCX</button></div>
+        <div class="status" id="pdfToDocxStatus"></div>
+      </div>
+      <div class="card">
+        <h3>Image to PDF</h3>
+        <input type="file" id="imgToPdfInput" accept="image/*" multiple />
+        <div class="row"><button class="btn" id="imgToPdfBtn">Convert + Download PDF</button></div>
+        <div class="status" id="imgToPdfStatus"></div>
+      </div>
+      <div class="card">
+        <h3>PDF to Images</h3>
+        <input type="file" id="pdfToImgInput" accept=".pdf,application/pdf" />
+        <div class="row"><button class="btn" id="pdfToImgBtn">Convert + Download ZIP</button></div>
+        <div class="status" id="pdfToImgStatus"></div>
+      </div>
+      <div class="card">
+        <h3>DOCX Merger</h3>
+        <input type="file" id="docxMergeInput" accept=".docx" multiple />
+        <div class="row"><button class="btn" id="docxMergeBtn">Merge + Download DOCX</button></div>
+        <div class="status" id="docxMergeStatus"></div>
+      </div>
+      <div class="card">
+        <h3>PDF Merger</h3>
+        <input type="file" id="pdfMergeInput" accept=".pdf,application/pdf" multiple />
+        <div class="row"><button class="btn" id="pdfMergeBtn">Merge + Download PDF</button></div>
+        <div class="status" id="pdfMergeStatus"></div>
+      </div>
+      <div class="card">
+        <h3>Image Merger</h3>
+        <input type="file" id="imgMergeInput" accept="image/*" multiple />
+        <div class="row">
+          <button class="btn" id="imgMergePngBtn">Merge + Download PNG</button>
+          <button class="btn secondary" id="imgMergePdfBtn">Merge + Download PDF</button>
+        </div>
+        <div class="status" id="imgMergeStatus"></div>
+      </div>
+    </div>
+  </div>
+  <button class="buddy-fab" id="buddyFab" aria-label="Open REC Buddy AI">
+    <img src="/aadhi-rec.jpg" alt="REC Buddy" onerror="this.src='/aadhi-rec.png'" />
+  </button>
+  <div class="buddy-bubble" id="buddyBubble">REC Buddy is here, how can I help you?</div>
+  <section class="buddy-panel" id="buddyPanel" aria-label="REC Buddy AI chatbot">
+    <div class="buddy-head">
+      <strong>REC Buddy AI</strong>
+      <button type="button" class="buddy-close" id="buddyClose" aria-label="Close">×</button>
+    </div>
+    <div class="buddy-faq" id="buddyFaq">
+      <button type="button" data-q="How to convert DOCX to PDF?">DOCX to PDF</button>
+      <button type="button" data-q="How to merge PDF files?">PDF merge</button>
+      <button type="button" data-q="How to convert image to PDF?">Image to PDF</button>
+      <button type="button" data-q="How to convert PDF to DOCX?">PDF to DOCX</button>
+      <button type="button" data-q="How does image merger work?">Image merger</button>
+      <button type="button" data-q="How to use voice commands in REC Buddy?">Voice commands</button>
+      <button type="button" data-q="Tell me about Rajalakshmi Engineering College">About REC</button>
+      <button type="button" data-q="Where is REC located?">REC location</button>
+      <button type="button" data-q="Is REC autonomous?">REC autonomous?</button>
+    </div>
+    <div class="buddy-body" id="buddyBody"></div>
+    <div class="buddy-foot">
+      <button type="button" class="buddy-voice" id="buddyVoiceBtn">Voice</button>
+      <input type="text" id="buddyInput" placeholder="Ask REC Buddy..." />
+      <button type="button" class="btn" id="buddySendBtn">Send</button>
+    </div>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    function setStatus(id, text, ok) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      el.style.color = ok === true ? '#35d07f' : ok === false ? '#ff6b6b' : '#b9bde6';
+    }
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+    async function fileToDataURL(file) {
+      return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.js';
+    }
+
+    document.getElementById('docxToPdfBtn').addEventListener('click', async () => {
+      const f = document.getElementById('docxToPdfInput').files[0];
+      if (!f) return setStatus('docxToPdfStatus', 'Choose a DOCX file.', false);
+      try {
+        setStatus('docxToPdfStatus', 'Converting...');
+        const arr = await f.arrayBuffer();
+        const extracted = await mammoth.extractRawText({ arrayBuffer: arr });
+        const text = String(extracted.value || '').trim() || 'No readable text found.';
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit:'pt', format:'a4' });
+        const lines = doc.splitTextToSize(text, 520);
+        let y = 48;
+        lines.forEach((ln) => {
+          if (y > 800) { doc.addPage(); y = 48; }
+          doc.text(ln, 40, y); y += 16;
+        });
+        downloadBlob(doc.output('blob'), f.name.replace(/\.docx$/i,'') + '_converted.pdf');
+        setStatus('docxToPdfStatus', 'Downloaded PDF.', true);
+      } catch (e) { setStatus('docxToPdfStatus', 'Conversion failed.', false); }
+    });
+
+    document.getElementById('pdfToDocxBtn').addEventListener('click', async () => {
+      const f = document.getElementById('pdfToDocxInput').files[0];
+      if (!f) return setStatus('pdfToDocxStatus', 'Choose a PDF file.', false);
+      try {
+        setStatus('pdfToDocxStatus', 'Converting...');
+        const bytes = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+        let full = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const c = await page.getTextContent();
+          const t = (c.items || []).map(it => (it && it.str) ? it.str : '').join(' ');
+          full += t + '\n\n';
+        }
+        const d = new docx.Document({ sections:[{ children:[new docx.Paragraph({ text: full || 'No text extracted from PDF.' })] }] });
+        const blob = await docx.Packer.toBlob(d);
+        downloadBlob(blob, f.name.replace(/\.pdf$/i,'') + '_converted.docx');
+        setStatus('pdfToDocxStatus', 'Downloaded DOCX.', true);
+      } catch (e) { setStatus('pdfToDocxStatus', 'Conversion failed.', false); }
+    });
+
+    document.getElementById('imgToPdfBtn').addEventListener('click', async () => {
+      const files = Array.from(document.getElementById('imgToPdfInput').files || []);
+      if (!files.length) return setStatus('imgToPdfStatus', 'Choose image files.', false);
+      try {
+        setStatus('imgToPdfStatus', 'Converting...');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit:'pt', format:'a4' });
+        for (let i = 0; i < files.length; i++) {
+          const dataUrl = await fileToDataURL(files[i]);
+          const img = await new Promise((resolve,reject)=>{ const im = new Image(); im.onload=()=>resolve(im); im.onerror=reject; im.src=dataUrl; });
+          if (i > 0) pdf.addPage();
+          const pageW = pdf.internal.pageSize.getWidth();
+          const pageH = pdf.internal.pageSize.getHeight();
+          const ratio = Math.min(pageW / img.width, pageH / img.height);
+          const w = img.width * ratio, h = img.height * ratio;
+          pdf.addImage(dataUrl, 'JPEG', (pageW - w) / 2, (pageH - h) / 2, w, h);
+        }
+        downloadBlob(pdf.output('blob'), 'images_converted.pdf');
+        setStatus('imgToPdfStatus', 'Downloaded PDF.', true);
+      } catch (e) { setStatus('imgToPdfStatus', 'Conversion failed.', false); }
+    });
+
+    document.getElementById('pdfToImgBtn').addEventListener('click', async () => {
+      const f = document.getElementById('pdfToImgInput').files[0];
+      if (!f) return setStatus('pdfToImgStatus', 'Choose a PDF file.', false);
+      try {
+        setStatus('pdfToImgStatus', 'Converting...');
+        const bytes = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const zip = new JSZip();
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const b = await new Promise(r => canvas.toBlob(r, 'image/png'));
+          zip.file(`page_${i}.png`, b);
+        }
+        const zipBlob = await zip.generateAsync({ type:'blob' });
+        downloadBlob(zipBlob, f.name.replace(/\.pdf$/i,'') + '_pages.zip');
+        setStatus('pdfToImgStatus', 'Downloaded ZIP.', true);
+      } catch (e) { setStatus('pdfToImgStatus', 'Conversion failed.', false); }
+    });
+
+    document.getElementById('docxMergeBtn').addEventListener('click', async () => {
+      const files = Array.from(document.getElementById('docxMergeInput').files || []);
+      if (files.length < 2) return setStatus('docxMergeStatus', 'Choose at least 2 DOCX files.', false);
+      try {
+        setStatus('docxMergeStatus', 'Merging...');
+        const children = [];
+        for (const f of files) {
+          const arr = await f.arrayBuffer();
+          const extracted = await mammoth.extractRawText({ arrayBuffer: arr });
+          const text = String(extracted.value || '').trim();
+          children.push(new docx.Paragraph({ text: `--- ${f.name} ---` }));
+          children.push(new docx.Paragraph({ text: text || '(No readable text)' }));
+          children.push(new docx.Paragraph({ text: '' }));
+        }
+        const out = new docx.Document({ sections:[{ children }] });
+        const blob = await docx.Packer.toBlob(out);
+        downloadBlob(blob, 'merged_documents.docx');
+        setStatus('docxMergeStatus', 'Downloaded merged DOCX.', true);
+      } catch (e) { setStatus('docxMergeStatus', 'Merge failed.', false); }
+    });
+
+    document.getElementById('pdfMergeBtn').addEventListener('click', async () => {
+      const files = Array.from(document.getElementById('pdfMergeInput').files || []);
+      if (files.length < 2) return setStatus('pdfMergeStatus', 'Choose at least 2 PDF files.', false);
+      try {
+        setStatus('pdfMergeStatus', 'Merging...');
+        const out = await PDFLib.PDFDocument.create();
+        for (const f of files) {
+          const src = await PDFLib.PDFDocument.load(await f.arrayBuffer());
+          const pages = await out.copyPages(src, src.getPageIndices());
+          pages.forEach(p => out.addPage(p));
+        }
+        const merged = await out.save();
+        downloadBlob(new Blob([merged], { type:'application/pdf' }), 'merged.pdf');
+        setStatus('pdfMergeStatus', 'Downloaded merged PDF.', true);
+      } catch (e) { setStatus('pdfMergeStatus', 'Merge failed.', false); }
+    });
+
+    async function mergeImagesVertical(files) {
+      const imgs = [];
+      for (const f of files) {
+        const url = await fileToDataURL(f);
+        const img = await new Promise((resolve,reject)=>{ const im=new Image(); im.onload=()=>resolve(im); im.onerror=reject; im.src=url; });
+        imgs.push(img);
+      }
+      const width = Math.max(...imgs.map(i => i.width));
+      const height = imgs.reduce((sum,i) => sum + i.height, 0);
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      let y = 0;
+      for (const img of imgs) { ctx.drawImage(img, 0, y); y += img.height; }
+      return canvas;
+    }
+    document.getElementById('imgMergePngBtn').addEventListener('click', async () => {
+      const files = Array.from(document.getElementById('imgMergeInput').files || []);
+      if (files.length < 2) return setStatus('imgMergeStatus', 'Choose at least 2 images.', false);
+      try {
+        setStatus('imgMergeStatus', 'Merging images...');
+        const canvas = await mergeImagesVertical(files);
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        downloadBlob(blob, 'merged_image.png');
+        setStatus('imgMergeStatus', 'Downloaded merged PNG.', true);
+      } catch (e) { setStatus('imgMergeStatus', 'Merge failed.', false); }
+    });
+    document.getElementById('imgMergePdfBtn').addEventListener('click', async () => {
+      const files = Array.from(document.getElementById('imgMergeInput').files || []);
+      if (files.length < 2) return setStatus('imgMergeStatus', 'Choose at least 2 images.', false);
+      try {
+        setStatus('imgMergeStatus', 'Converting merged image to PDF...');
+        const canvas = await mergeImagesVertical(files);
+        const data = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit:'pt', format:'a4' });
+        const w = pdf.internal.pageSize.getWidth();
+        const h = pdf.internal.pageSize.getHeight();
+        const ratio = Math.min(w / canvas.width, h / canvas.height);
+        pdf.addImage(data, 'PNG', 0, 0, canvas.width * ratio, canvas.height * ratio);
+        downloadBlob(pdf.output('blob'), 'merged_image.pdf');
+        setStatus('imgMergeStatus', 'Downloaded merged PDF.', true);
+      } catch (e) { setStatus('imgMergeStatus', 'Merge failed.', false); }
+    });
+
+    // REC Buddy AI chatbot (File Tools)
+    const buddyFab = document.getElementById('buddyFab');
+    const buddyBubble = document.getElementById('buddyBubble');
+    const buddyPanel = document.getElementById('buddyPanel');
+    const buddyClose = document.getElementById('buddyClose');
+    const buddyBody = document.getElementById('buddyBody');
+    const buddyInput = document.getElementById('buddyInput');
+    const buddySendBtn = document.getElementById('buddySendBtn');
+    const buddyFaq = document.getElementById('buddyFaq');
+    const buddyVoiceBtn = document.getElementById('buddyVoiceBtn');
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let buddyRecognition = null;
+    let buddyListening = false;
+    let buddyPreferredFemaleVoice = null;
+
+    function buddyAppend(role, text) {
+      if (!buddyBody || !text) return;
+      const clean = role === 'bot' ? sanitizeAssistantText(text) : String(text || '');
+      const d = document.createElement('div');
+      d.className = 'buddy-msg ' + (role === 'user' ? 'user' : 'bot');
+      d.textContent = clean;
+      buddyBody.appendChild(d);
+      buddyBody.scrollTop = buddyBody.scrollHeight;
+    }
+    function sanitizeAssistantText(input) {
+      return String(input || '')
+        .replace(/[#$%^&*_=+~`|<>\[\]{}\\]+/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+    function isEnglishVoice(v) {
+      if (!v || !v.lang) return false;
+      const lang = String(v.lang).toLowerCase();
+      return lang.startsWith('en-');
+    }
+    function getBuddyFemaleVoice() {
+      if (!('speechSynthesis' in window)) return null;
+      const voices = speechSynthesis.getVoices();
+      if (!voices.length) return null;
+      if (buddyPreferredFemaleVoice && voices.indexOf(buddyPreferredFemaleVoice) !== -1 && isEnglishVoice(buddyPreferredFemaleVoice)) return buddyPreferredFemaleVoice;
+      buddyPreferredFemaleVoice = null;
+      const englishOnly = voices.filter(isEnglishVoice);
+      const preferred = [
+        /female|woman|zira|samantha|karen|victoria|aria|veena|lekha/i,
+      ];
+      for (const re of preferred) {
+        const v = englishOnly.find((x) => x && x.name && re.test(String(x.name)));
+        if (v) { buddyPreferredFemaleVoice = v; return v; }
+      }
+      if (englishOnly.length) { buddyPreferredFemaleVoice = englishOnly[0]; return englishOnly[0]; }
+      return null;
+    }
+    if ('speechSynthesis' in window) {
+      speechSynthesis.onvoiceschanged = function () { buddyPreferredFemaleVoice = null; getBuddyFemaleVoice(); };
+      getBuddyFemaleVoice();
+    }
+    function buddySpeak(text) {
+      if (!text || !('speechSynthesis' in window)) return;
+      const cleanedText = sanitizeAssistantText(text);
+      if (!cleanedText) return;
+      const u = new SpeechSynthesisUtterance(cleanedText);
+      const female = getBuddyFemaleVoice();
+      if (female && isEnglishVoice(female)) {
+        u.voice = female;
+        u.lang = female.lang || 'en-IN';
+      } else {
+        u.lang = 'en-IN';
+      }
+      u.rate = 0.95;
+      window.speechSynthesis.cancel();
+      try { window.speechSynthesis.speak(u); } catch (_) {}
+    }
+    function buddyLocalReply(q) {
+      const t = String(q || '').toLowerCase();
+      if (t.includes('docx') && t.includes('pdf')) return 'Use DOCX to PDF: select one DOCX file, then click Convert plus Download PDF.';
+      if (t.includes('pdf') && t.includes('docx')) return 'Use PDF to DOCX: upload your PDF and click Convert plus Download DOCX.';
+      if (t.includes('merge') && t.includes('pdf')) return 'Use PDF Merger and choose at least two files. Then click Merge plus Download PDF.';
+      if (t.includes('image') && t.includes('pdf')) return 'Use Image to PDF and select one or more images. Then convert and download PDF.';
+      if (t.includes('voice')) return 'Voice is English only. Click Voice and speak your question clearly.';
+      if ((/\b(about|what is|tell me about)\b/.test(t) && /\b(rec|rajalakshmi|college|engineering)\b/.test(t)) || t.includes('about rec')) {
+        return 'Rajalakshmi Engineering College (An Autonomous Institution) is a leading engineering institution near Chennai, focused on academic excellence, innovation, and industry-ready learning. For official updates, visit www.rajalakshmi.org.';
+      }
+      if (/\b(where|location|address|located)\b/.test(t) && /\b(rec|rajalakshmi|college)\b/.test(t)) {
+        return 'Rajalakshmi Engineering College is located at Thandalam, near Sriperumbudur, close to Chennai in Tamil Nadu, India.';
+      }
+      if (/\b(autonomous|autonomy|affiliated)\b/.test(t) && /\b(rec|rajalakshmi|college)\b/.test(t)) {
+        return 'Yes. Rajalakshmi Engineering College is an autonomous institution.';
+      }
+      if (/\b(contact|website|email|phone)\b/.test(t) && /\b(rec|rajalakshmi|college)\b/.test(t)) {
+        return 'For official contact details, please check the college website: www.rajalakshmi.org.';
+      }
+      return 'I can help with file tools and college questions too. Ask about DOCX/PDF conversion, merge tools, REC location, autonomous status, or college info.';
+    }
+    async function buddyAskAI(q) {
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: q, context: 'student' }),
+        });
+        const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (data && data.reply) return String(data.reply);
+      } catch (_) {}
+      return buddyLocalReply(q);
+    }
+    async function buddySend() {
+      const q = buddyInput ? String(buddyInput.value || '').trim() : '';
+      if (!q) return;
+      buddyInput.value = '';
+      buddyAppend('user', q);
+      const r = await buddyAskAI(q);
+      buddyAppend('bot', r);
+      buddySpeak(r);
+    }
+    function openBuddy() {
+      if (!buddyPanel) return;
+      buddyPanel.classList.add('open');
+      if (buddyBubble) buddyBubble.style.display = 'none';
+      if (buddyBody && !buddyBody.dataset.greeted) {
+        const msg = 'Hello, I am REC Buddy AI. How can I help you?';
+        buddyAppend('bot', msg);
+        buddySpeak(msg);
+        buddyBody.dataset.greeted = '1';
+      }
+      if (buddyInput) buddyInput.focus();
+    }
+    function closeBuddy() {
+      if (buddyPanel) buddyPanel.classList.remove('open');
+    }
+    if (buddyFab) buddyFab.addEventListener('click', openBuddy);
+    if (buddyClose) buddyClose.addEventListener('click', closeBuddy);
+    if (buddySendBtn) buddySendBtn.addEventListener('click', buddySend);
+    if (buddyInput) buddyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') buddySend(); });
+    if (buddyFaq) {
+      buddyFaq.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest('button[data-q]');
+        if (!btn) return;
+        if (buddyInput) buddyInput.value = btn.getAttribute('data-q') || '';
+        buddySend();
+      });
+    }
+    if (buddyVoiceBtn && SpeechRecognitionAPI) {
+      buddyRecognition = new SpeechRecognitionAPI();
+      buddyRecognition.lang = 'en-IN';
+      buddyRecognition.continuous = false;
+      buddyRecognition.interimResults = false;
+      buddyRecognition.onresult = (e) => {
+        const text = e && e.results && e.results[0] && e.results[0][0] ? e.results[0][0].transcript : '';
+        if (buddyInput) buddyInput.value = String(text || '').trim();
+        buddySend();
+      };
+      buddyRecognition.onend = () => {
+        buddyListening = false;
+        buddyVoiceBtn.textContent = 'Voice';
+      };
+      buddyVoiceBtn.addEventListener('click', () => {
+        openBuddy();
+        if (!buddyRecognition) return;
+        if (buddyListening) {
+          buddyRecognition.stop();
+          return;
+        }
+        buddyListening = true;
+        buddyVoiceBtn.textContent = 'Listening...';
+        buddyRecognition.start();
+      });
+    } else if (buddyVoiceBtn) {
+      buddyVoiceBtn.disabled = true;
+      buddyVoiceBtn.title = 'Speech recognition is not supported in this browser.';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REC Classroom Attention</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 280px;
+        margin: 0;
+        padding: 12px 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 13px;
+        color: #24135f;
+        background: #f4f2fb;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #24135f;
+      }
+      .url-row {
+        margin-bottom: 10px;
+      }
+      .url-row label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #413563;
+      }
+      .url-row input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid rgba(36, 19, 95, 0.2);
+        border-radius: 8px;
+        font-size: 12px;
+      }
+      .links {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .links a {
+        display: block;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid rgba(36, 19, 95, 0.12);
+        color: #24135f;
+        text-decoration: none;
+        font-weight: 600;
+        transition: background 0.15s, box-shadow 0.15s;
+      }
+      .links a:hover {
+        background: #e8e4f7;
+        box-shadow: 0 2px 8px rgba(36, 19, 95, 0.1);
+      }
+      .links a.student { border-left: 4px solid #1565c0; }
+      .links a.faculty { border-left: 4px solid #5c2eb8; }
+      .links a.leadership { border-left: 4px solid #2e7d32; }
+      .links a.login { border-left: 4px solid #6b6586; }
+      .foot {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #6b6586;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>REC Classroom Attention</h1>
+    <div class="url-row">
+      <label for="baseUrl">Server URL</label>
+      <input type="text" id="baseUrl" placeholder="http://localhost:3000" />
+    </div>
+    <div class="links">
+      <a href="#" class="student" data-path="/student">Student Dashboard</a>
+      <a href="#" class="faculty" data-path="/">Faculty Dashboard</a>
+      <a href="#" class="leadership" data-path="/leadership">Leadership Dashboard</a>
+      <a href="#" class="login" data-path="/leadership-login">Leadership Login</a>
+    </div>
+    <p class="foot">Opens in current tab. Change URL for your college server.</p>
+    <script src="popup.js"></script>
+  </body>
+</html>

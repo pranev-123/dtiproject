@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Registration Management</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #f7f8fc; color: #1f2937; }
+      .header {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+      }
+      .header-logo {
+        height: 72px;
+        width: auto;
+        object-fit: contain;
+        image-rendering: auto;
+      }
+      .header-text-main {
+        font-size: 20px;
+        font-weight: 800;
+        color: #24135f;
+      }
+      .header-text-sub {
+        font-size: 13px;
+        color: #5f6b7a;
+        font-weight: 700;
+      }
+      .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+      .top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+      .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:16px 0; }
+      .card { background:#fff; border-radius:12px; padding:14px; box-shadow:0 3px 12px rgba(15,23,42,0.08); }
+      .card .label { font-size:12px; color:#6b7280; }
+      .card .value { font-size:26px; font-weight:700; margin-top:6px; }
+      .actions { display:flex; gap:10px; }
+      button { border:0; border-radius:8px; padding:10px 12px; cursor:pointer; font-weight:600; }
+      .primary { background:#4f46e5; color:#fff; }
+      .secondary { background:#e5e7eb; color:#111827; }
+      table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 3px 12px rgba(15,23,42,0.08); }
+      th, td { padding:10px; border-bottom:1px solid #eef2f7; text-align:left; font-size:13px; }
+      th { background:#eef2ff; font-weight:700; }
+      .status-pill { border-radius:999px; padding:3px 8px; font-size:12px; font-weight:700; }
+      .yes { background:#dcfce7; color:#166534; }
+      .no { background:#fee2e2; color:#991b1b; }
+      .muted { color:#6b7280; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <img class="header-logo" src="/rec-logo.jpg" alt="Rajalakshmi Engineering College logo" />
+      <div>
+        <div class="header-text-main">Rajalakshmi Engineering College ( An Autonomous Institution)</div>
+        <div class="header-text-sub">Admin Dashboard</div>
+      </div>
+    </header>
+    <div class="wrap">
+      <div class="top">
+        <h2>Admin Registration Management</h2>
+        <div class="actions">
+          <button id="btnExportCsv" class="primary">Export Excel (.csv)</button>
+          <button id="btnDownloadDb" class="secondary">Download db.json</button>
+          <button id="btnBack" class="secondary">Back to Dashboard</button>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="label">Student registrations</div>
+          <div class="value" id="studentCount">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Faculty registrations</div>
+          <div class="value" id="facultyCount">0</div>
+        </div>
+      </div>
+      <div class="muted" id="adminStatus"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>S NO</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Designation</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Registered</th>
+            <th>Email Verified</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="rowsBody"></tbody>
+      </table>
+    </div>
+    <script>
+      const rowsBody = document.getElementById('rowsBody');
+      const studentCountEl = document.getElementById('studentCount');
+      const facultyCountEl = document.getElementById('facultyCount');
+      const statusEl = document.getElementById('adminStatus');
+      const btnExportCsv = document.getElementById('btnExportCsv');
+      const btnDownloadDb = document.getElementById('btnDownloadDb');
+      const btnBack = document.getElementById('btnBack');
+
+      function pill(val) {
+        const yes = String(val || '').toLowerCase() === 'yes';
+        return `<span class="status-pill ${yes ? 'yes' : 'no'}">${yes ? 'Yes' : 'No'}</span>`;
+      }
+
+      async function setVerification(email, type, emailVerified) {
+        const res = await fetch('/api/admin/registrations/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, type, emailVerified }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.message || 'Unable to update verification state.');
+      }
+
+      async function loadRows() {
+        statusEl.textContent = 'Loading registrations...';
+        const res = await fetch('/api/admin/registrations', { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          statusEl.textContent = data.message || 'Admin access required.';
+          rowsBody.innerHTML = '';
+          return;
+        }
+        studentCountEl.textContent = String(data.counts.studentRegistrations || 0);
+        facultyCountEl.textContent = String(data.counts.facultyRegistrations || 0);
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        rowsBody.innerHTML = rows.map((r) => {
+          const verified = String(r.emailVerified || '').toLowerCase() === 'yes';
+          return `
+            <tr>
+              <td>${r.sNo}</td>
+              <td>${r.date || '—'}</td>
+              <td>${r.time || '—'}</td>
+              <td>${r.designation || '—'}</td>
+              <td>${r.name || '—'}</td>
+              <td>${r.type || '—'}</td>
+              <td>${pill(r.registered)}</td>
+              <td>${pill(r.emailVerified)}</td>
+              <td><button class="secondary js-toggle-verify" data-email="${(r.email || '').replace(/"/g, '&quot;')}" data-type="${(r.type || '').replace(/"/g, '&quot;')}" data-next="${verified ? 'false' : 'true'}">${verified ? 'Mark Unverified' : 'Mark Verified'}</button></td>
+            </tr>
+          `;
+        }).join('');
+        statusEl.textContent = `Loaded ${rows.length} registration rows.`;
+      }
+
+      rowsBody.addEventListener('click', async (event) => {
+        const btn = event.target.closest('.js-toggle-verify');
+        if (!btn) return;
+        btn.disabled = true;
+        try {
+          await setVerification(btn.dataset.email, btn.dataset.type, btn.dataset.next === 'true');
+          await loadRows();
+        } catch (e) {
+          statusEl.textContent = e && e.message ? e.message : 'Verification update failed.';
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      btnExportCsv.addEventListener('click', () => {
+        window.location.href = '/api/admin/registrations/export';
+      });
+
+      btnDownloadDb.addEventListener('click', () => {
+        window.location.href = '/api/admin/database/download';
+      });
+
+      btnBack.addEventListener('click', () => {
+        window.location.href = '/';
+      });
+
+      loadRows();
+    </script>
+  </body>
+</html>

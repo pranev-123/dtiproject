@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REC Classroom Attention | Faculty Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .login-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+      }
+      .login-shell::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: url("https://dli6r6oycdqaz.cloudfront.net/college-510/user-1343861/d9d7ec54446f49b68b99409f86efeb9f_20250714_121042_510_1343861_Banner1.jpeg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: rgb(44, 62, 80);
+        z-index: 0;
+      }
+      .login-shell::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(36, 19, 95, 0.5);
+        z-index: 1;
+      }
+      .login-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border-radius: 22px;
+        box-shadow: 0 20px 50px rgba(15, 9, 59, 0.25);
+        padding: 26px 26px 22px;
+      }
+      .login-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .header-logo {
+        height: 70px;
+        width: auto;
+        object-fit: contain;
+        image-rendering: auto;
+      }
+      .login-title-main {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        align-items: center;
+        color: #24135f;
+      }
+      .login-title-sub {
+        font-size: 12px;
+        color: #756f94;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #413563;
+      }
+      .field input {
+        border-radius: 999px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        padding: 9px 14px;
+        font-size: 14px;
+        outline: none;
+      }
+      .field input:focus {
+        border-color: #5c2eb8;
+        box-shadow: 0 0 0 2px rgba(92, 46, 184, 0.18);
+      }
+      .login-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 4px;
+        margin-bottom: 6px;
+      }
+      .primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 28px;
+        border-radius: 10px;
+        border: 1px solid #5c2eb8;
+        outline: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #ffffff;
+        background: #5c2eb8;
+        box-shadow: 0 4px 12px rgba(92, 46, 184, 0.25);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      }
+      .primary:hover {
+        transform: translateY(-1px);
+        background: #4f26a4;
+        box-shadow: 0 8px 16px rgba(92, 46, 184, 0.32);
+      }
+      .primary:active {
+        transform: translateY(0);
+      }
+      .login-footer {
+        font-size: 11px;
+        color: #8c86a7;
+        text-align: center;
+        margin-top: 8px;
+      }
+      .verify-notice {
+        display: none;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #e8f4fd;
+        border: 1px solid #64b5f6;
+        color: #0d47a1;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .error-text {
+        font-size: 12px;
+        color: #c0392b;
+        min-height: 16px;
+      }
+      .hint-small {
+        font-size: 11px;
+        color: #918ab3;
+        margin-top: 2px;
+      }
+      .forgot-link {
+        color: #5c2eb8;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .forgot-link:hover {
+        text-decoration: underline;
+      }
+      .forgot-btn {
+        padding: 6px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(36, 19, 95, 0.2);
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 2px 8px rgba(36, 19, 95, 0.08);
+      }
+      .forgot-btn:hover {
+        background: rgba(92, 46, 184, 0.08);
+        border-color: #5c2eb8;
+        box-shadow: 0 4px 12px rgba(36, 19, 95, 0.12);
+      }
+      .secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 24px;
+        border-radius: 10px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        background: #fff;
+        color: #5c2eb8;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 2px 8px rgba(36, 19, 95, 0.08);
+      }
+      .secondary:hover {
+        background: #f3f2ff;
+        color: #4f26a4;
+        box-shadow: 0 4px 12px rgba(36, 19, 95, 0.12);
+      }
+      .register-cta-row {
+        margin-top: 14px;
+      }
+      .register-cta {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 2px solid #5c2eb8;
+        background: linear-gradient(180deg, #faf8ff 0%, #f0ecff 100%);
+        color: #24135f;
+        font-size: 14px;
+        font-weight: 800;
+        text-decoration: none;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        box-shadow: 0 4px 14px rgba(92, 46, 184, 0.2);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      }
+      .register-cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(92, 46, 184, 0.28);
+        background: linear-gradient(180deg, #fff 0%, #f6f3ff 100%);
+      }
+      .google-login-wrap {
+        margin-top: 8px;
+      }
+      .google-login-divider {
+        margin: 8px 0;
+        font-size: 12px;
+        color: #8177a5;
+      }
+      .register-cta .neon-text {
+        background: none;
+        -webkit-background-clip: initial;
+        background-clip: initial;
+        -webkit-text-fill-color: currentColor;
+        animation: none;
+        color: #5c2eb8;
+      }
+      button .neon-text,
+      .secondary .neon-text {
+        background: none;
+        -webkit-background-clip: initial;
+        background-clip: initial;
+        -webkit-text-fill-color: currentColor;
+        animation: none;
+      }
+      .neon-text {
+        background: linear-gradient(90deg, #ff00ff, #00e5ff, #ffff00, #ff00ff);
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: neonRgbShift 2s linear infinite;
+      }
+      @keyframes neonRgbShift {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 300% 50%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="login-header">
+          <img src="rec-logo.jpg" alt="logo of the college" class="header-logo">
+      
+          <div class="header-text">
+              <div class="login-title-main">
+                  Rajalakshmi Engineering College(An Autonomous Institution)
+              </div>
+              <div class="login-title-sub"><span class="neon-text">AI Classroom Attention — Faculty Login</span></div>
+          </div>
+      </div>
+      
+
+        <form id="loginForm">
+          <div id="verifyNotice" class="verify-notice" role="status"></div>
+          <div class="field">
+            <label for="email">Official email ID</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="name@rajalakshmi.edu.in"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Enter password from credentials email"
+              required
+              minlength="6"
+              maxlength="32"
+              autocomplete="current-password"
+            />
+          </div>
+          <div class="error-text" id="errorText"></div>
+          <div class="login-actions">
+            <button class="primary" type="submit" id="btnLogin">
+              <span class="neon-text">Sign in</span>
+            </button>
+          </div>
+          <div class="register-cta-row">
+            <a href="/register" class="register-cta"><span class="neon-text">Register — new faculty account</span></a>
+          </div>
+          <div id="otpStep" style="display:none; margin-top: 8px;">
+            <div class="field" style="margin-bottom: 10px;">
+              <label for="otpInput">Enter OTP sent to your email</label>
+              <input
+                type="text"
+                id="otpInput"
+                name="otp"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="6"
+                placeholder="6-digit OTP"
+                autocomplete="one-time-code"
+              />
+            </div>
+            <div class="login-actions" style="margin-top: 0;">
+              <button class="primary" type="button" id="btnVerifyOtp">
+                <span class="neon-text">Verify OTP</span>
+              </button>
+              <button class="secondary" type="button" id="btnResendOtp">
+                <span class="neon-text">Resend OTP</span>
+              </button>
+            </div>
+            <div class="hint-small" id="otpHint" style="min-height: 14px; text-align:left;"></div>
+          </div>
+          <p class="hint-small" style="margin-top:6px;">
+            <button type="button" class="forgot-btn" id="btnForgotPassword"><span class="neon-text">Forgot password?</span></button>
+          </p>
+          <p class="hint-small">
+            After registration, sign in with the password sent to your credentials email. You can change it from the dashboard.
+          </p>
+        </form>
+
+        <div class="login-footer">© 2026 Rajalakshmi Engineering College ( An Autonmous Institution)</div>
+      </div>
+    </div>
+
+    <script>
+      const yearEl = document.getElementById('year');
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
+      (function () {
+        try {
+          var q = new URLSearchParams(window.location.search || '');
+          if (q.get('notice') === 'verify-email') {
+            var n = document.getElementById('verifyNotice');
+            if (n) {
+              n.style.display = 'block';
+              n.textContent =
+                'Verify your email using the link we sent you, then sign in with your password and complete OTP.';
+            }
+          }
+        } catch (e) {}
+      })();
+      const form = document.getElementById('loginForm');
+      const errorText = document.getElementById('errorText');
+      const btnLogin = document.getElementById('btnLogin');
+      const btnForgotPassword = document.getElementById('btnForgotPassword');
+      const otpStep = document.getElementById('otpStep');
+      const otpInput = document.getElementById('otpInput');
+      const btnVerifyOtp = document.getElementById('btnVerifyOtp');
+      const btnResendOtp = document.getElementById('btnResendOtp');
+      const otpHint = document.getElementById('otpHint');
+      let activeOtpChallengeId = null;
+      if (btnForgotPassword) btnForgotPassword.addEventListener('click', function() { window.location.href = '/forgot-password'; });
+
+      function setOtpStepVisible(visible) {
+        if (!otpStep) return;
+        otpStep.style.display = visible ? 'block' : 'none';
+        if (visible) {
+          errorText.textContent = '';
+          if (otpHint) otpHint.textContent = 'OTP has been sent to your email. Enter the 6-digit OTP.';
+          if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
+          }
+        }
+      }
+
+      async function completeOtpVerify(verifyUrl) {
+        const otp = (otpInput && otpInput.value ? otpInput.value : '').trim();
+        if (!otp) {
+          errorText.textContent = 'Enter OTP.';
+          return false;
+        }
+        if (!activeOtpChallengeId) {
+          errorText.textContent = 'OTP challenge is missing. Please sign in again.';
+          return false;
+        }
+        btnVerifyOtp.disabled = true;
+        const otpRes = await fetch(verifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ challengeId: activeOtpChallengeId, otp: otp }),
+        });
+        const otpData = await otpRes.json();
+        if (!otpData.ok) {
+          errorText.textContent = otpData.message || 'OTP verification failed.';
+          btnVerifyOtp.disabled = false;
+          return false;
+        }
+        window.location.href = otpData.requirePasswordChange ? '/change-password' : '/';
+        return true;
+      }
+
+      if (btnVerifyOtp) {
+        btnVerifyOtp.addEventListener('click', function () {
+          completeOtpVerify('/api/login/verify-otp');
+        });
+      }
+      if (btnResendOtp) {
+        btnResendOtp.addEventListener('click', async function () {
+          if (!activeOtpChallengeId) {
+            errorText.textContent = 'OTP challenge is missing. Please sign in again.';
+            return;
+          }
+          btnResendOtp.disabled = true;
+          try {
+            const res = await fetch('/api/login/resend-otp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ challengeId: activeOtpChallengeId }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Unable to resend OTP.');
+            if (otpHint) otpHint.textContent = data.message || 'A new OTP has been sent to your email.';
+            errorText.textContent = '';
+          } catch (err) {
+            errorText.textContent = err && err.message ? err.message : 'Unable to resend OTP.';
+          } finally {
+            btnResendOtp.disabled = false;
+          }
+        });
+      }
+      if (otpInput) {
+        otpInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            completeOtpVerify('/api/login/verify-otp');
+          }
+        });
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorText.textContent = '';
+        btnLogin.disabled = true;
+
+        const formData = new FormData(form);
+        const payload = {
+          email: formData.get('email'),
+          password: formData.get('password'),
+        };
+        if (String(payload.password || '').trim().length < 6) {
+          errorText.textContent = 'Password must be at least 6 characters.';
+          btnLogin.disabled = false;
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (data.ok && data.otpRequired) {
+            activeOtpChallengeId = data.challengeId;
+            setOtpStepVisible(true);
+            if (otpHint) {
+              otpHint.textContent = data.message || 'OTP has been sent to your email. Enter the 6-digit OTP.';
+              if (data.debugOtp) otpHint.textContent += ` (Dev OTP: ${data.debugOtp})`;
+            }
+          } else if (data.ok) {
+            window.location.href = data.requirePasswordChange ? '/change-password' : '/';
+          } else {
+            errorText.textContent = data.message || 'Login failed.';
+          }
+        } catch (err) {
+          console.error(err);
+          errorText.textContent = 'Unable to reach server. Please try again.';
+        } finally {
+          btnLogin.disabled = false;
+        }
+      });
+
+    </script>
+  </body>
+</html>
+

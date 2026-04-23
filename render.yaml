@@ -1,0 +1,25 @@
+# Render Blueprint: REC Live Camera & AI Attention
+# Deploy from Render Dashboard: New > Blueprint > Connect repo > Select this file
+# Or push to GitHub and use "New Web Service" with build/start commands below.
+
+services:
+  - type: web
+    name: rec-live-video-dashboard
+    runtime: node
+    region: oregon
+
+    buildCommand: npm install
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      # Optional: uncomment and set for session report emails
+      # - key: SMTP_USER
+      #   sync: false
+      # - key: SMTP_PASS
+      #   sync: false
+      # - key: FROM_EMAIL
+      #   sync: false

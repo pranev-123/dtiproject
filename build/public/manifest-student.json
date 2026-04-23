@@ -1,0 +1,14 @@
+{
+  "name": "REC Classroom Attention - Student",
+  "short_name": "REC Student",
+  "description": "AI Classroom Attention - Student Dashboard",
+  "start_url": "/student",
+  "display": "standalone",
+  "background_color": "#f5f4ff",
+  "theme_color": "#5c2eb8",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/rec-logo.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "/rec-logo.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" }
+  ]
+}

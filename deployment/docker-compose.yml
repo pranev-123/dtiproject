@@ -1,0 +1,59 @@
+# Production-style stack: nginx (TLS termination) + Node app + Docker secrets + persistent data volume.
+# From this directory:
+#   1) Create secrets (see deployment/README.md)
+#   2) Place TLS cert at ./certs/fullchain.pem and key at ./certs/privkey.pem (Let's Encrypt or self-signed)
+#   3) docker compose up --build -d
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      TRUST_PROXY: "1"
+      BEHIND_REVERSE_PROXY: "true"
+      SESSION_COOKIE_TRUST_PROXY: "true"
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      SMTP_PASS_FILE: /run/secrets/smtp_pass
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
+    secrets:
+      - session_secret
+      - smtp_pass
+    volumes:
+      - rec_data:/app/data
+    expose:
+      - "3000"
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - internal
+
+volumes:
+  rec_data:
+
+networks:
+  internal:
+    driver: bridge
+
+secrets:
+  session_secret:
+    file: ./secrets/session_secret
+  smtp_pass:
+    file: ./secrets/smtp_pass

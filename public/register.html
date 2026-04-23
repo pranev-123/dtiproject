@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REC Classroom Attention | Faculty Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        position: relative;
+        padding: 24px;
+      }
+      .register-background {
+        position: fixed;
+        inset: 0;
+        background-image: url("https://dli6r6oycdqaz.cloudfront.net/college-510/user-1343861/d9d7ec54446f49b68b99409f86efeb9f_20250714_121042_510_1343861_Banner1.jpeg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: rgb(44, 62, 80);
+        z-index: 0;
+      }
+      .register-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(36, 19, 95, 0.5);
+        z-index: 1;
+      }
+      .login-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+        z-index: 2;
+      }
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border-radius: 22px;
+        box-shadow: 0 20px 50px rgba(15, 9, 59, 0.25);
+        padding: 26px 26px 22px;
+      }
+      .login-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .header-logo {
+        height: 70px;
+        width: auto;
+        object-fit: contain;
+        image-rendering: auto;
+      }
+      .login-title-main {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        align-items: center;
+        color: #24135f;
+      }
+      .login-title-sub {
+        font-size: 12px;
+        color: #756f94;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #413563;
+      }
+      .field input, .field select {
+        border-radius: 999px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        padding: 9px 14px;
+        font-size: 14px;
+        outline: none;
+      }
+      .field input:focus, .field select:focus {
+        border-color: #5c2eb8;
+        box-shadow: 0 0 0 2px rgba(92, 46, 184, 0.18);
+      }
+      .field select {
+        cursor: pointer;
+        background: #fff;
+        border-radius: 10px;
+        appearance: auto;
+      }
+      .field-select-wrap {
+        margin-bottom: 14px;
+      }
+      .field-select-wrap .field { margin-bottom: 0; }
+      .field-select-wrap select {
+        display: block;
+        width: 100%;
+      }
+      .login-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 4px;
+        margin-bottom: 6px;
+      }
+      .primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 28px;
+        border-radius: 10px;
+        border: 1px solid #5c2eb8;
+        outline: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #ffffff;
+        background: #5c2eb8;
+        box-shadow: 0 4px 12px rgba(92, 46, 184, 0.25);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      }
+      .primary:hover {
+        transform: translateY(-1px);
+        background: #4f26a4;
+        box-shadow: 0 8px 16px rgba(92, 46, 184, 0.32);
+      }
+      .primary:active {
+        transform: translateY(0);
+      }
+      button .neon-text {
+        background: none;
+        -webkit-background-clip: initial;
+        background-clip: initial;
+        -webkit-text-fill-color: currentColor;
+        animation: none;
+      }
+      .login-footer {
+        font-size: 11px;
+        color: #8c86a7;
+        text-align: center;
+        margin-top: 8px;
+      }
+      .error-text { font-size: 12px; color: #c0392b; min-height: 16px; }
+      .success-text { font-size: 12px; color: #27ae60; min-height: 16px; }
+      .hint-small { font-size: 11px; color: #918ab3; margin-top: 2px; }
+      .forgot-link {
+        color: #5c2eb8;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .forgot-link:hover { text-decoration: underline; }
+      .neon-text {
+        background: linear-gradient(90deg, #ff00ff, #00e5ff, #ffff00, #ff00ff);
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: neonRgbShift 2s linear infinite;
+      }
+      @keyframes neonRgbShift {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 300% 50%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="register-background"></div>
+    <div class="register-overlay"></div>
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="login-header">
+          <img src="rec-logo.jpg" alt="logo of the college" class="header-logo">
+          <div class="header-text">
+            <div class="login-title-main">Rajalakshmi Engineering College (An Autonomous Institution)</div>
+            <div class="login-title-sub"><span class="neon-text">AI Classroom Attention — Faculty Register</span></div>
+            <p class="hint-small" style="margin:10px 0 0;font-size:12px;line-height:1.45;color:#5b5670;">
+              Students: <a href="/student/register" class="forgot-link">Student registration</a>. Faculty may use numeric staff emails; if an address is already a student login, use <a href="/student/login" class="forgot-link">Student login</a> instead.
+            </p>
+          </div>
+        </div>
+
+        <form id="registerForm">
+          <div class="field">
+            <label for="email">Official college email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="name@rajalakshmi.edu.in"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="mobile">Mobile number <span style="color:#f87171">*</span> (contact on file)</label>
+            <input
+              type="tel"
+              id="mobile"
+              name="mobile"
+              placeholder="+91 or 10-digit number"
+              autocomplete="tel"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Full name" required />
+          </div>
+          <div class="field">
+            <label for="staffId">Staff ID</label>
+            <input type="text" id="staffId" name="staffId" placeholder="e.g. REC001" required />
+          </div>
+          <div class="field">
+            <label for="department">Department</label>
+            <select id="department" name="department">
+              <option value="">Select department</option>
+              <option value="CSE">CSE</option>
+              <option value="IT">IT</option>
+              <option value="ECE">ECE</option>
+              <option value="EEE">EEE</option>
+              <option value="MECH">MECH</option>
+              <option value="CIVIL">CIVIL</option>
+              <option value="AIDS">AIDS</option>
+              <option value="AIML">AIML</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field-select-wrap">
+            <div class="field">
+              <label for="designation">Designation</label>
+              <select id="designation" name="designation" size="1">
+                <option value="">Select designation</option>
+                <option value="Principal">Principal</option>
+                <option value="Vice Principal">Vice Principal</option>
+                <option value="Director">Director</option>
+                <option value="Director (Alumni Affairs)">Director (Alumni Affairs)</option>
+                <option value="Dean (Academics)">Dean (Academics)</option>
+                <option value="Dean (Student Affairs)">Dean (Student Affairs)</option>
+                <option value="Dean">Dean</option>
+                <option value="Head Of Department">Head Of Department (HoD)</option>
+                <option value="Assistant Head Of Department">Assistant Head Of Department (Asst. HoD)</option>
+                <option value="Department Coordinator">Department Coordinator</option>
+                <option value="Assistant Professor">Assistant Professor</option>
+                <option value="Assistant Professor (SG)">Assistant Professor (SG)</option>
+                <option value="Professor">Professor</option>
+                <option value="Professor of practice">Professor of practice</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="error-text" id="errorText"></div>
+          <div class="success-text" id="successText"></div>
+          <div class="login-actions">
+            <button class="primary" type="submit" id="btnRegister"><span class="neon-text">Register</span></button>
+          </div>
+          <p class="hint-small" style="margin-top:8px;">
+            Already registered? <a href="/login" class="forgot-link">Sign in</a>
+          </p>
+        </form>
+
+        <div class="login-footer">
+          © <span id="year"></span> Rajalakshmi Engineering College &middot; Internal Teaching Tool
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('year').textContent = new Date().getFullYear();
+      const form = document.getElementById('registerForm');
+      const errorText = document.getElementById('errorText');
+      const successText = document.getElementById('successText');
+      const btnRegister = document.getElementById('btnRegister');
+
+      function showFacultyRegisterError(message, linkPath, linkLabel) {
+        errorText.textContent = '';
+        errorText.appendChild(document.createTextNode(message || 'Registration failed.'));
+        if (linkPath && typeof linkPath === 'string' && linkPath.startsWith('/')) {
+          errorText.appendChild(document.createElement('br'));
+          const a = document.createElement('a');
+          a.href = linkPath;
+          a.className = 'forgot-link';
+          a.textContent = linkLabel || 'Open Student registration';
+          errorText.appendChild(a);
+        }
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorText.textContent = '';
+        successText.textContent = '';
+        btnRegister.disabled = true;
+
+        const email = document.getElementById('email').value.trim();
+        const name = document.getElementById('name').value.trim();
+        const staffId = document.getElementById('staffId').value.trim();
+        const department = document.getElementById('department').value.trim();
+        const designation = document.getElementById('designation').value.trim();
+        const mobile = document.getElementById('mobile').value.trim();
+
+        if (!email || !name || !staffId) {
+          errorText.textContent = 'Email, name and Staff ID are required.';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (!email.toLowerCase().endsWith('@rajalakshmi.edu.in')) {
+          errorText.textContent = 'Use your official @rajalakshmi.edu.in email.';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (!mobile) {
+          errorText.textContent = 'Mobile number is required.';
+          btnRegister.disabled = false;
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name, staffId, department, designation, mobile }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            successText.textContent = data.message || 'Registration successful.';
+            window.location.href = '/login';
+          } else {
+            let link = '';
+            let linkLabel = '';
+            if (data.errorCode === 'STUDENT_LOGIN_EMAIL') {
+              link = data.studentLoginPath && String(data.studentLoginPath).startsWith('/') ? data.studentLoginPath : '/student/login';
+              linkLabel = 'Open Student login';
+            } else if (data.studentRegisterPath && String(data.studentRegisterPath).startsWith('/')) {
+              link = data.studentRegisterPath;
+              linkLabel = 'Open Student registration';
+            }
+            showFacultyRegisterError(data.message || 'Registration failed.', link, linkLabel);
+            btnRegister.disabled = false;
+          }
+        } catch (err) {
+          console.error(err);
+          errorText.textContent = 'Unable to reach server. Please try again.';
+          btnRegister.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

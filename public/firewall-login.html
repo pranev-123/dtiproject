@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firewall Login</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f4f6ff; color: #1f2937; }
+    .wrap { max-width: 560px; margin: 36px auto; padding: 0 14px; }
+    .card { background: #fff; border: 1px solid #dbe2ff; border-radius: 14px; padding: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+    h1 { margin: 0 0 10px; color: #24135f; font-size: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .brand-logo { width: 58px; height: 58px; object-fit: contain; border-radius: 10px; background: #fff; border: 1px solid #e5e7eb; }
+    .brand-title {
+      font-size: 14px; font-weight: 800; line-height: 1.25;
+      color: #24135f;
+      background: linear-gradient(90deg, #7c3aed, #06b6d4, #a855f7, #7c3aed);
+      background-size: 240% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: neonFlow 2.8s linear infinite;
+      text-shadow: 0 0 8px rgba(124, 58, 237, 0.35), 0 0 14px rgba(6, 182, 212, 0.25);
+    }
+    @keyframes neonFlow {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 240% 50%; }
+    }
+    .muted { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
+    label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 13px; }
+    input { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+    button { border: none; border-radius: 999px; padding: 10px 16px; background: #5c2eb8; color: #fff; font-weight: 700; cursor: pointer; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .btn-lite { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+    #status { min-height: 18px; margin-top: 10px; font-size: 13px; }
+    .ok { color: #065f46; }
+    .bad { color: #b91c1c; }
+    .box { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #fafafa; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="brand">
+        <img class="brand-logo" src="/rec-logo.jpg" alt="Rajalakshmi Engineering College logo" />
+        <div class="brand-title">Rajalakshmi Engineering College<br />(An Autonomous Institution)</div>
+      </div>
+      <h1>Firewall Login</h1>
+      <div class="muted">Connected network is auto-detected. Enter firewall username and password to unlock network access.</div>
+      <div class="box" id="netInfo">Detecting network...</div>
+      <label for="fwUser">Firewall username</label>
+      <input id="fwUser" autocomplete="username" />
+      <label for="fwPass">Firewall password</label>
+      <input id="fwPass" type="password" autocomplete="current-password" minlength="6" maxlength="32" placeholder="Enter firewall password (6-32 characters)" />
+      <div class="row">
+        <button id="btnLogin" type="button">Login firewall</button>
+        <button id="btnRoom" type="button" class="btn-lite">Open firewall room</button>
+        <button id="btnBack" type="button" class="btn-lite">Back dashboard</button>
+      </div>
+      <div id="status"></div>
+    </div>
+  </div>
+  <script>
+    const netInfo = document.getElementById('netInfo');
+    const fwUser = document.getElementById('fwUser');
+    const fwPass = document.getElementById('fwPass');
+    const statusEl = document.getElementById('status');
+    const btnLogin = document.getElementById('btnLogin');
+    const btnRoom = document.getElementById('btnRoom');
+    const btnBack = document.getElementById('btnBack');
+
+    function getNetworkSnapshot() {
+      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      return {
+        online: navigator.onLine !== false,
+        type: c && c.type ? String(c.type) : 'unknown',
+        effectiveType: c && c.effectiveType ? String(c.effectiveType) : 'unknown',
+        downlink: c && c.downlink ? Number(c.downlink) : 0,
+        rtt: c && c.rtt ? Number(c.rtt) : 0,
+        networkLabel: (navigator.onLine === false ? 'Offline' : 'Internet connected'),
+      };
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/firewall/status', { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Unable to load firewall status.');
+        if (fwUser && data.usernameHint) fwUser.value = data.usernameHint;
+        const n = data.network || {};
+        netInfo.textContent = 'Network: ' + (n.networkLabel || '-') + ' | IP: ' + (n.ipAddress || '-') + ' | Type: ' + (n.effectiveType || '-');
+        if (data.unlocked) {
+          statusEl.textContent = 'Firewall already unlocked for this session.';
+          statusEl.className = 'ok';
+        } else {
+          statusEl.textContent = '';
+          statusEl.className = '';
+        }
+      } catch (e) {
+        statusEl.textContent = e && e.message ? e.message : 'Unable to load firewall status.';
+        statusEl.className = 'bad';
+      }
+    }
+
+    btnLogin.addEventListener('click', async () => {
+      btnLogin.disabled = true;
+      try {
+        const username = String(fwUser.value || '').trim();
+        const password = String(fwPass.value || '').trim();
+        if (!username || !password) throw new Error('Enter firewall username and password.');
+        if (password.length < 6 || password.length > 32) throw new Error('Firewall password must be 6-32 characters.');
+        const res = await fetch('/api/firewall/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password, network: getNetworkSnapshot() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Firewall login failed.');
+        statusEl.textContent = data.message || 'Firewall login successful.';
+        statusEl.className = 'ok';
+        setTimeout(() => { window.location.href = '/firewall-room'; }, 500);
+      } catch (e) {
+        statusEl.textContent = e && e.message ? e.message : 'Firewall login failed.';
+        statusEl.className = 'bad';
+      } finally {
+        btnLogin.disabled = false;
+      }
+    });
+
+    btnRoom.addEventListener('click', () => { window.location.href = '/firewall-room'; });
+    btnBack.addEventListener('click', () => { history.back(); });
+    loadStatus();
+  </script>
+</body>
+</html>

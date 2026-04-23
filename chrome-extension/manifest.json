@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "REC Classroom Attention",
+  "version": "1.0.0",
+  "description": "Quick access to REC AI Classroom Attention System — Student, Faculty & Leadership dashboards.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "REC Classroom Attention"
+  },
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://localhost:*/*", "https://*/*", "http://*/*"]
+}

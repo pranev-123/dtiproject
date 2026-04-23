@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REC Food & Stationery Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f4f2fb;
+      }
+      .food-shell {
+        max-width: 1180px;
+        margin: 16px auto 32px;
+        padding: 0 16px;
+      }
+      .food-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+        background: #ffffff;
+        border-bottom: 1px solid rgba(36, 19, 95, 0.08);
+      }
+      .food-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .food-logo {
+        height: 56px;
+        width: auto;
+        object-fit: contain;
+      }
+      .food-title-main {
+        font-size: 17px;
+        font-weight: 700;
+        color: #24135f;
+      }
+      .food-title-sub {
+        font-size: 12px;
+        color: #6b6586;
+      }
+      .food-header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: #413563;
+      }
+      .food-chip {
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f4f2fb;
+        border: 1px solid rgba(36, 19, 95, 0.12);
+      }
+      .food-grid {
+        display: grid;
+        grid-template-columns: 3fr 2fr;
+        gap: 16px;
+        margin-top: 18px;
+      }
+      @media (max-width: 900px) {
+        .food-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .food-card {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid rgba(36, 19, 95, 0.08);
+        padding: 14px 16px 16px;
+      }
+      .food-card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #24135f;
+        margin-bottom: 4px;
+      }
+      .food-card-sub {
+        font-size: 11px;
+        color: #6b6586;
+        margin-bottom: 10px;
+      }
+      .shop-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+      }
+      .shop-tile {
+        border-radius: 14px;
+        border: 1px solid rgba(36, 19, 95, 0.12);
+        padding: 10px 11px;
+        background: radial-gradient(circle at top left, #fff7f0, #ffffff);
+        cursor: pointer;
+        transition: box-shadow 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+      }
+      .shop-tile.active {
+        border-color: #5c2eb8;
+        box-shadow: 0 0 0 1px rgba(92, 46, 184, 0.4), 0 10px 24px rgba(15, 23, 42, 0.25);
+        transform: translateY(-1px);
+      }
+      .shop-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: #24135f;
+      }
+      .shop-tagline {
+        font-size: 11px;
+        color: #6b6586;
+        margin-top: 2px;
+      }
+      .shop-badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .shop-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #f3f2ff;
+        color: #413563;
+      }
+      .menu-list {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+      }
+      .menu-item {
+        border-radius: 12px;
+        border: 1px solid rgba(36, 19, 95, 0.1);
+        padding: 8px 9px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+      }
+      .menu-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 6px;
+      }
+      .menu-item-name {
+        font-weight: 600;
+        color: #24135f;
+      }
+      .menu-item-price {
+        font-weight: 600;
+        color: #1b5e20;
+        font-size: 12px;
+      }
+      .menu-item-meta {
+        font-size: 11px;
+        color: #6b6586;
+      }
+      .menu-item-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .menu-add-btn {
+        border-radius: 999px;
+        border: none;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient(120deg, #5c2eb8, #24135f);
+        color: #ffffff;
+      }
+      .menu-add-btn:hover {
+        box-shadow: 0 0 8px rgba(92, 46, 184, 0.5);
+      }
+      .cart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .cart-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #24135f;
+      }
+      .cart-subtitle {
+        font-size: 11px;
+        color: #6b6586;
+      }
+      .cart-items {
+        max-height: 260px;
+        overflow-y: auto;
+        border-radius: 10px;
+        border: 1px solid rgba(36, 19, 95, 0.08);
+        padding: 6px 6px 4px;
+        background: #faf7ff;
+      }
+      .cart-item {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 4px;
+        font-size: 11px;
+      }
+      .cart-item + .cart-item {
+        border-top: 1px dashed rgba(36, 19, 95, 0.12);
+        margin-top: 2px;
+        padding-top: 6px;
+      }
+      .cart-shop {
+        font-weight: 600;
+        color: #6b6586;
+      }
+      .cart-name {
+        color: #24135f;
+      }
+      .cart-qty {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .cart-qty button {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1px solid rgba(36, 19, 95, 0.2);
+        background: #ffffff;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .cart-total-row {
+        margin-top: 8px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 600;
+        color: #24135f;
+      }
+      .cart-note {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #6b6586;
+      }
+      .cart-actions {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+      }
+      .cart-btn-primary {
+        flex: 1;
+        border-radius: 999px;
+        border: none;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #ffffff;
+        background: linear-gradient(120deg, #ff00ff, #00e5ff, #ffff00);
+        background-size: 220% 220%;
+        animation: cartNeon 2.2s ease-in-out infinite alternate;
+      }
+      .cart-btn-secondary {
+        border-radius: 999px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #ffffff;
+        color: #413563;
+        cursor: pointer;
+      }
+      @keyframes cartNeon {
+        0% { background-position: 0% 50%; box-shadow: 0 0 10px rgba(255, 0, 255, 0.5), 0 0 18px rgba(0, 229, 255, 0.5); }
+        100% { background-position: 100% 50%; box-shadow: 0 0 14px rgba(255, 0, 255, 0.8), 0 0 26px rgba(0, 229, 255, 0.7); }
+      }
+      .stationery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .stationery-item {
+        border-radius: 12px;
+        border: 1px solid rgba(36, 19, 95, 0.1);
+        padding: 8px 9px;
+        background: #ffffff;
+        font-size: 12px;
+      }
+      .stationery-name {
+        font-weight: 600;
+        color: #24135f;
+      }
+      .stationery-meta {
+        font-size: 11px;
+        color: #6b6586;
+        margin-top: 2px;
+      }
+      .stationery-footer {
+        margin-top: 3px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 6px;
+      }
+      .stationery-price {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1b5e20;
+      }
+      .stationery-add {
+        border-radius: 999px;
+        border: none;
+        padding: 3px 8px;
+        font-size: 11px;
+        background: #f3f2ff;
+        color: #24135f;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="food-header">
+      <div class="food-header-left">
+        <img src="/rec-logo.jpg" alt="Rajalakshmi Engineering College" class="food-logo" />
+        <div>
+          <div class="food-title-main">REC Food &amp; Campus Store Dashboard</div>
+          <div class="food-title-sub">Quick ordering from REC Caf&eacute;, REC Hut, SSix Sense Garden &amp; REC Mart</div>
+        </div>
+      </div>
+      <div class="food-header-right">
+        <span class="food-chip">Campus pickup only</span>
+        <span class="food-chip">Demo &mdash; not a live payment system</span>
+      </div>
+    </header>
+
+    <main class="food-shell">
+      <div class="food-grid">
+        <section class="food-card">
+          <div class="food-card-title">Food ordering</div>
+          <div class="food-card-sub">Choose a shop to see popular items and add them to your cart.</div>
+          <div class="shop-list" aria-label="Food shops on campus">
+            <button
+              type="button"
+              class="shop-tile active"
+              data-shop-id="rec-cafe"
+              data-shop-name="REC Caf&eacute;"
+            >
+              <div class="shop-name">REC Caf&eacute;</div>
+              <div class="shop-tagline">Main canteen &mdash; quick meals and snacks</div>
+              <div class="shop-badge-row">
+                <span class="shop-badge">South Indian</span>
+                <span class="shop-badge">Combo meals</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="shop-tile"
+              data-shop-id="rec-hut"
+              data-shop-name="REC Hut"
+            >
+              <div class="shop-name">REC Hut</div>
+              <div class="shop-tagline">Evening snacks, juices and chats</div>
+              <div class="shop-badge-row">
+                <span class="shop-badge">Juices</span>
+                <span class="shop-badge">Fast bites</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="shop-tile"
+              data-shop-id="ssix-sense"
+              data-shop-name="SSix Sense Garden"
+            >
+              <div class="shop-name">SSix Sense Garden</div>
+              <div class="shop-tagline">Open garden seating &mdash; specials and beverages</div>
+              <div class="shop-badge-row">
+                <span class="shop-badge">Garden seating</span>
+                <span class="shop-badge">Specials</span>
+              </div>
+            </button>
+          </div>
+          <div id="menuContainer" class="menu-list" aria-label="Menu items for selected shop"></div>
+        </section>
+
+        <aside class="food-card">
+          <div class="cart-header">
+            <div>
+              <div class="cart-title">Your cart</div>
+              <div class="cart-subtitle" id="cartSubtitle">No items yet</div>
+            </div>
+          </div>
+          <div id="cartItems" class="cart-items" aria-label="Selected items"></div>
+          <div class="cart-total-row">
+            <span>Total</span>
+            <span id="cartTotal">₹0</span>
+          </div>
+          <div class="cart-note">
+            This dashboard is for **demo** ordering only. Please confirm payment and pickup time with the shop counter.
+          </div>
+          <div class="cart-actions">
+            <button type="button" class="cart-btn-primary" id="btnPlaceOrder">Place order (demo)</button>
+            <button type="button" class="cart-btn-secondary" id="btnClearCart">Clear</button>
+          </div>
+
+          <hr style="margin:14px 0;border:none;border-top:1px dashed rgba(36,19,95,0.14);" />
+
+          <div class="food-card-title">REC Mart &mdash; Stationery</div>
+          <div class="food-card-sub">Add essential stationery items from REC Mart.</div>
+          <div class="stationery-grid" id="stationeryGrid"></div>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      // Simple in-browser menu + cart for demo only.
+      const FOOD_SHOPS = {
+        'rec-cafe': {
+          name: 'REC Caf\u00e9',
+          items: [
+            { id: 'rc-breakfast', name: 'Mini breakfast combo', price: 45, note: 'Idli, vada, chutney', tag: 'Morning' },
+            { id: 'rc-meals', name: 'South Indian meals', price: 70, note: 'Lunch only', tag: 'Meals' },
+            { id: 'rc-friedrice', name: 'Veg fried rice', price: 65, note: 'With sauce', tag: 'Popular' },
+            { id: 'rc-tea', name: 'Tea / Coffee', price: 12, note: 'Hot beverages', tag: 'Beverage' },
+          ],
+        },
+        'rec-hut': {
+          name: 'REC Hut',
+          items: [
+            { id: 'rh-puffs', name: 'Puffs / Snacks plate', price: 35, note: 'Veg & egg options', tag: 'Snacks' },
+            { id: 'rh-juice', name: 'Fresh juice (any)', price: 40, note: 'Seasonal fruits', tag: 'Juice' },
+            { id: 'rh-noodles', name: 'Veg noodles', price: 60, note: 'Evening special', tag: 'Hot' },
+          ],
+        },
+        'ssix-sense': {
+          name: 'SSix Sense Garden',
+          items: [
+            { id: 'ss-combo', name: 'Garden combo', price: 90, note: 'Snack + drink', tag: 'Combo' },
+            { id: 'ss-mojito', name: 'Lime mojito', price: 50, note: 'Mocktail', tag: 'Beverage' },
+            { id: 'ss-paneer', name: 'Crispy paneer bites', price: 80, note: 'Shared plate', tag: 'Starter' },
+          ],
+        },
+      };
+
+      const STATIONERY_ITEMS = [
+        { id: 'rm-notebook', name: 'REC notebook (A4 ruled)', price: 40, note: 'College branded', pack: 'Single' },
+        { id: 'rm-pen', name: 'Blue pen (pack of 5)', price: 50, note: 'Smooth writing', pack: 'Pack of 5' },
+        { id: 'rm-pencil', name: 'HB pencil set', price: 25, note: 'Pack of 5', pack: 'Pack' },
+        { id: 'rm-file', name: 'Exam file with tag', price: 20, note: 'Transparent', pack: 'Single' },
+        { id: 'rm-calci', name: 'Scientific calculator (exam model)', price: 650, note: 'On request only', pack: 'Device' },
+      ];
+
+      const menuContainer = document.getElementById('menuContainer');
+      const cartItemsEl = document.getElementById('cartItems');
+      const cartTotalEl = document.getElementById('cartTotal');
+      const cartSubtitleEl = document.getElementById('cartSubtitle');
+      const btnPlaceOrder = document.getElementById('btnPlaceOrder');
+      const btnClearCart = document.getElementById('btnClearCart');
+      const stationeryGrid = document.getElementById('stationeryGrid');
+
+      const shopButtons = Array.from(document.querySelectorAll('.shop-tile'));
+
+      let activeShopId = 'rec-cafe';
+      const cart = new Map(); // key -> { name, shop, qty, price }
+
+      function renderMenu() {
+        const shop = FOOD_SHOPS[activeShopId];
+        menuContainer.innerHTML = '';
+        if (!shop) return;
+        shop.items.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'menu-item';
+          div.innerHTML = `
+            <div class="menu-item-header">
+              <div class="menu-item-name">${item.name}</div>
+              <div class="menu-item-price">\u20b9${item.price}</div>
+            </div>
+            <div class="menu-item-meta">${item.note || ''}${item.tag ? ' \u00b7 ' + item.tag : ''}</div>
+            <div class="menu-item-actions">
+              <button type="button" class="menu-add-btn" data-item-id="${item.id}" data-item-name="${item.name}" data-item-price="${item.price}" data-item-shop="${shop.name}">Add</button>
+            </div>
+          `;
+          menuContainer.appendChild(div);
+        });
+      }
+
+      function renderStationery() {
+        stationeryGrid.innerHTML = '';
+        STATIONERY_ITEMS.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'stationery-item';
+          div.innerHTML = `
+            <div class="stationery-name">${item.name}</div>
+            <div class="stationery-meta">${item.note || ''}${item.pack ? ' \u00b7 ' + item.pack : ''}</div>
+            <div class="stationery-footer">
+              <span class="stationery-price">\u20b9${item.price}</span>
+              <button type="button" class="stationery-add" data-item-id="${item.id}" data-item-name="${item.name}" data-item-price="${item.price}" data-item-shop="REC Mart">Add</button>
+            </div>
+          `;
+          stationeryGrid.appendChild(div);
+        });
+      }
+
+      function updateCartSubtitle() {
+        if (!cart.size) {
+          cartSubtitleEl.textContent = 'No items yet';
+          return;
+        }
+        const count = Array.from(cart.values()).reduce((sum, it) => sum + it.qty, 0);
+        cartSubtitleEl.textContent = count + ' item' + (count > 1 ? 's' : '') + ' in cart';
+      }
+
+      function renderCart() {
+        cartItemsEl.innerHTML = '';
+        let total = 0;
+        cart.forEach((item, key) => {
+          total += item.qty * item.price;
+          const row = document.createElement('div');
+          row.className = 'cart-item';
+          row.innerHTML = `
+            <div>
+              <div class="cart-name">${item.name}</div>
+              <div class="cart-shop">${item.shop}</div>
+            </div>
+            <div class="cart-qty">
+              <button type="button" data-cart-action="dec" data-cart-key="${key}">-</button>
+              <span>${item.qty}</span>
+              <button type="button" data-cart-action="inc" data-cart-key="${key}">+</button>
+            </div>
+            <div>\u20b9${item.qty * item.price}</div>
+          `;
+          cartItemsEl.appendChild(row);
+        });
+        cartTotalEl.textContent = '\u20b9' + total;
+        updateCartSubtitle();
+      }
+
+      function addToCart(id, name, price, shop) {
+        const key = shop + '::' + id;
+        const existing = cart.get(key) || { name, price: Number(price) || 0, qty: 0, shop };
+        existing.qty += 1;
+        cart.set(key, existing);
+        renderCart();
+      }
+
+      shopButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-shop-id');
+          if (!id) return;
+          activeShopId = id;
+          shopButtons.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderMenu();
+        });
+      });
+
+      menuContainer.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target && target.classList.contains('menu-add-btn')) {
+          addToCart(
+            target.getAttribute('data-item-id'),
+            target.getAttribute('data-item-name'),
+            Number(target.getAttribute('data-item-price')),
+            target.getAttribute('data-item-shop')
+          );
+        }
+      });
+
+      stationeryGrid.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target && target.classList.contains('stationery-add')) {
+          addToCart(
+            target.getAttribute('data-item-id'),
+            target.getAttribute('data-item-name'),
+            Number(target.getAttribute('data-item-price')),
+            target.getAttribute('data-item-shop')
+          );
+        }
+      });
+
+      cartItemsEl.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!target || !target.getAttribute) return;
+        const action = target.getAttribute('data-cart-action');
+        const key = target.getAttribute('data-cart-key');
+        if (!action || !key || !cart.has(key)) return;
+        const item = cart.get(key);
+        if (action === 'inc') {
+          item.qty += 1;
+        } else if (action === 'dec') {
+          item.qty -= 1;
+          if (item.qty <= 0) {
+            cart.delete(key);
+          }
+        }
+        renderCart();
+      });
+
+      if (btnClearCart) {
+        btnClearCart.addEventListener('click', () => {
+          cart.clear();
+          renderCart();
+        });
+      }
+
+      if (btnPlaceOrder) {
+        btnPlaceOrder.addEventListener('click', () => {
+          if (!cart.size) {
+            alert('Add at least one item before placing an order.');
+            return;
+          }
+          const summary = Array.from(cart.values())
+            .map((it) => it.qty + ' x ' + it.name + ' (' + it.shop + ')')
+            .join('\n');
+          alert(
+            'Demo order summary (show this at the counter):\n\n' +
+              summary +
+              '\n\nNote: This is a demo dashboard only. Billing and final confirmation happen at the respective shop.'
+          );
+        });
+      }
+
+      // Initial render
+      renderMenu();
+      renderStationery();
+      renderCart();
+    </script>
+  </body>
+</html>
+

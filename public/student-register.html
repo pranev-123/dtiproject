@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REC Classroom Attention | Student Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .student-login-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+      }
+      .background-image {
+        position: absolute;
+        inset: 0;
+        background-image: url("https://dli6r6oycdqaz.cloudfront.net/college-510/user-1343861/d9d7ec54446f49b68b99409f86efeb9f_20250714_121042_510_1343861_Banner1.jpeg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: rgb(44, 62, 80);
+        z-index: 0;
+      }
+      .student-login-shell::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(36, 19, 95, 0.5);
+        z-index: 1;
+      }
+      .student-login-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 460px;
+        background: #fff;
+        border-radius: 22px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+        padding: 26px 26px 22px;
+      }
+      .login-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .header-logo {
+        display: block;
+        height: 70px;
+        width: auto;
+        max-width: 120px;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+      .login-title-main {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #24135f;
+      }
+      .login-title-sub {
+        font-size: 12px;
+        color: #756f94;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #413563;
+      }
+      .field input {
+        border-radius: 999px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        padding: 9px 14px;
+        font-size: 14px;
+        outline: none;
+      }
+      .field input:focus {
+        border-color: #5c2eb8;
+        box-shadow: 0 0 0 2px rgba(92, 46, 184, 0.18);
+      }
+      .login-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 4px;
+        margin-bottom: 6px;
+      }
+      .primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 28px;
+        border-radius: 10px;
+        border: 1px solid #5c2eb8;
+        outline: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #ffffff;
+        background: #5c2eb8;
+        box-shadow: 0 4px 12px rgba(92, 46, 184, 0.25);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      }
+      .primary:hover {
+        transform: translateY(-1px);
+        background: #4f26a4;
+        box-shadow: 0 8px 16px rgba(92, 46, 184, 0.32);
+      }
+      .secondary-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        border-radius: 10px;
+        border: 1px solid rgba(36, 19, 95, 0.18);
+        background: #fff;
+        color: #5c2eb8;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s;
+        box-shadow: 0 2px 8px rgba(36, 19, 95, 0.08);
+      }
+      .secondary-btn:hover {
+        background: #f3f2ff;
+        border-color: rgba(36, 19, 95, 0.26);
+        color: #4f26a4;
+        box-shadow: 0 4px 12px rgba(36, 19, 95, 0.12);
+      }
+      .neon-text {
+        background: linear-gradient(90deg, #ff00ff, #00e5ff, #ffff00, #ff00ff);
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: neonRgbShift 2s linear infinite;
+      }
+      @keyframes neonRgbShift {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 300% 50%; }
+      }
+      button .neon-text,
+      .secondary-btn .neon-text {
+        background: none;
+        -webkit-background-clip: initial;
+        background-clip: initial;
+        -webkit-text-fill-color: currentColor;
+        animation: none;
+      }
+      .login-register-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .login-footer {
+        font-size: 11px;
+        color: #8c86a7;
+        text-align: center;
+        margin-top: 8px;
+      }
+      .error-text {
+        font-size: 12px;
+        color: #c0392b;
+        min-height: 16px;
+      }
+      .success-text {
+        font-size: 12px;
+        color: #1b5e20;
+        min-height: 16px;
+      }
+      .hint-small {
+        font-size: 11px;
+        color: #918ab3;
+        margin-top: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="student-login-shell">
+      <div class="background-image" aria-hidden="true"></div>
+      <div class="student-login-card">
+        <div class="login-header">
+          <img src="/rec-logo.jpg" alt="Rajalakshmi Engineering College" class="header-logo" />
+          <div class="header-text">
+            <div class="login-title-main">Rajalakshmi Engineering College (An Autonomous Institution)</div>
+            <div class="login-title-sub"><span class="neon-text">AI Classroom Attention — Student Register</span></div>
+          </div>
+        </div>
+
+        <form id="studentRegisterForm">
+          <div class="field">
+            <label for="registerNumber">Register number (8 or 9 digits)</label>
+            <input
+              type="text"
+              id="registerNumber"
+              name="registerNumber"
+              placeholder="e.g. 23100150"
+              required
+              minlength="8"
+              maxlength="9"
+              pattern="[0-9]{8,9}"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </div>
+          <div class="field">
+            <label for="fullName">Full name</label>
+            <input
+              type="text"
+              id="fullName"
+              name="fullName"
+              placeholder="As on college records"
+              required
+              minlength="2"
+              maxlength="120"
+              autocomplete="name"
+            />
+          </div>
+          <div class="field">
+            <label for="college">College</label>
+            <input
+              type="text"
+              id="college"
+              name="college"
+              placeholder="e.g. Rajalakshmi Engineering College"
+              required
+              minlength="2"
+              maxlength="200"
+              autocomplete="organization"
+            />
+          </div>
+          <div class="field">
+            <label for="department">Department</label>
+            <input
+              type="text"
+              id="department"
+              name="department"
+              placeholder="e.g. eee, cse, it"
+              required
+              minlength="2"
+              maxlength="20"
+              autocomplete="organization-title"
+            />
+          </div>
+          <div class="field">
+            <label for="email">Official college email (login)</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="name@rajalakshmi.edu.in"
+              required
+              autocomplete="email"
+            />
+          </div>
+          <div class="field">
+            <label for="mobile">Mobile number <span style="color:#f87171">*</span> (contact on file)</label>
+            <input type="tel" id="mobile" name="mobile" placeholder="+91 or 10-digit number" autocomplete="tel" required />
+          </div>
+          <div class="error-text" id="errorText"></div>
+          <div class="success-text" id="successText"></div>
+          <div class="login-actions">
+            <button class="primary" type="submit" id="btnRegister"><span class="neon-text">Register</span></button>
+          </div>
+          <div class="login-register-row">
+            <span class="hint-small" style="margin-top:0;">Already registered?</span>
+            <a href="/student/login" class="secondary-btn"><span class="neon-text">Sign in</span></a>
+          </div>
+        </form>
+
+        <div class="login-footer">
+          © <span id="year"></span> Rajalakshmi Engineering College &middot; Student Portal
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('year').textContent = new Date().getFullYear();
+      const form = document.getElementById('studentRegisterForm');
+      const errorText = document.getElementById('errorText');
+      const successText = document.getElementById('successText');
+      const btnRegister = document.getElementById('btnRegister');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorText.textContent = '';
+        successText.textContent = '';
+        btnRegister.disabled = true;
+
+        const registerNumber = (form.registerNumber.value || '').trim();
+        const name = (form.fullName.value || '').trim();
+        const college = (form.college.value || '').trim();
+        const department = (form.department.value || '').trim().toLowerCase();
+        const email = (form.email.value || '').trim().toLowerCase();
+        const mobile = (form.mobile.value || '').trim();
+
+        if (!/^\d{8,9}$/.test(registerNumber)) {
+          errorText.textContent = 'Register number must be 8 or 9 digits.';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (name.length < 2) {
+          errorText.textContent = 'Enter your full name.';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (college.length < 2) {
+          errorText.textContent = 'Enter your college name.';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (!/^[a-z0-9]{2,12}$/i.test(department)) {
+          errorText.textContent = 'Enter a valid department (2-12 letters/numbers, e.g., eee, cse, it).';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (!email.endsWith('@rajalakshmi.edu.in')) {
+          errorText.textContent = 'Use your official college email (@rajalakshmi.edu.in).';
+          btnRegister.disabled = false;
+          return;
+        }
+        if (!mobile) {
+          errorText.textContent = 'Mobile number is required.';
+          btnRegister.disabled = false;
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/student-register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, registerNumber, name, college, department, mobile }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            successText.textContent = data.message || 'Registration successful. You can now sign in.';
+            form.reset();
+            window.location.href = '/student/login';
+          } else {
+            errorText.textContent = data.message || 'Registration failed.';
+          }
+        } catch (err) {
+          console.error(err);
+          errorText.textContent = 'Unable to reach server. Please try again.';
+        } finally {
+          btnRegister.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

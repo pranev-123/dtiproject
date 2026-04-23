@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Enter verification code | REC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .login-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+      }
+      .verify-success-background {
+        position: absolute;
+        inset: 0;
+        background-image: url("https://dli6r6oycdqaz.cloudfront.net/college-510/user-1343861/d9d7ec54446f49b68b99409f86efeb9f_20250714_121042_510_1343861_Banner1.jpeg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: rgb(44, 62, 80);
+        z-index: 0;
+      }
+      .verify-success-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(36, 19, 95, 0.5);
+        z-index: 1;
+      }
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border-radius: 22px;
+        padding: 26px 26px 22px;
+        position: relative;
+        z-index: 2;
+        box-shadow:
+          0 0 15px rgba(255, 0, 255, 0.35),
+          0 0 30px rgba(0, 229, 255, 0.3),
+          0 20px 50px rgba(15, 9, 59, 0.25);
+      }
+      .login-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+      .header-logo {
+        height: 64px;
+        width: auto;
+        object-fit: contain;
+      }
+      .login-title-main {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #24135f;
+        line-height: 1.3;
+      }
+      .login-title-sub {
+        font-size: 11px;
+        margin-top: 4px;
+        color: #5c2eb8;
+        font-weight: 600;
+      }
+      .verify-intro {
+        font-size: 14px;
+        color: #374151;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+      .code-input {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.35em;
+        text-align: center;
+        text-transform: uppercase;
+        padding: 14px 12px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        font-family: ui-monospace, Consolas, monospace;
+        margin-bottom: 14px;
+      }
+      .code-input:focus {
+        outline: none;
+        border-color: #5c2eb8;
+        box-shadow: 0 0 0 3px rgba(92, 46, 184, 0.2);
+      }
+      .btn-verify {
+        width: 100%;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        cursor: pointer;
+        background: linear-gradient(120deg, #16a34a, #15803d);
+        box-shadow: 0 0 14px rgba(5, 150, 105, 0.35);
+      }
+      .btn-verify:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+      .msg-error {
+        font-size: 13px;
+        color: #b91c1c;
+        margin-bottom: 12px;
+        min-height: 1.2em;
+      }
+      .login-footer {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(36, 19, 95, 0.1);
+        text-align: center;
+        font-size: 12px;
+        color: #756f94;
+      }
+      .login-footer a {
+        color: #5c2eb8;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-shell">
+      <div class="verify-success-background"></div>
+      <div class="verify-success-overlay"></div>
+      <div class="login-card">
+        <div class="login-header">
+          <img src="/rec-logo.jpg" alt="Rajalakshmi Engineering College" class="header-logo" onerror="this.onerror=null; this.src='/rajalakshmi_engineering_college_logo.jpg';" />
+          <div class="header-text">
+            <div class="login-title-main">Rajalakshmi Engineering College (An Autonomous Institution)</div>
+            <div class="login-title-sub">Email verification — enter code</div>
+          </div>
+        </div>
+
+        <p class="verify-intro">
+          Enter the <strong>6-character code</strong> from your verification email (letters A–Z and digits 2–9). You can also use the link in that email instead.
+        </p>
+
+        <div class="msg-error" id="err" aria-live="polite"></div>
+
+        <form id="form">
+          <input
+            id="code"
+            name="code"
+            class="code-input"
+            type="text"
+            maxlength="8"
+            autocomplete="one-time-code"
+            inputmode="text"
+            autocapitalize="characters"
+            spellcheck="false"
+            placeholder="XXXXXX"
+            aria-label="Verification code"
+            required
+          />
+          <button type="submit" class="btn-verify" id="btn">Verify email</button>
+        </form>
+
+        <div class="login-footer">
+          <a href="/login">Faculty login</a> · <a href="/student/login">Student login</a><br />
+          © <span id="year"></span> Rajalakshmi Engineering College
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('year').textContent = new Date().getFullYear();
+      var form = document.getElementById('form');
+      var input = document.getElementById('code');
+      var err = document.getElementById('err');
+      var btn = document.getElementById('btn');
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        err.textContent = '';
+        btn.disabled = true;
+        try {
+          var res = await fetch('/api/verify-email-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: input.value }),
+          });
+          var data = await res.json().catch(function () {
+            return {};
+          });
+          if (res.ok && data.ok && data.redirect) {
+            window.location.href = data.redirect;
+            return;
+          }
+          err.textContent = (data && data.message) || 'Something went wrong. Try again.';
+        } catch (x) {
+          err.textContent = 'Network error. Check your connection and try again.';
+        }
+        btn.disabled = false;
+      });
+    </script>
+  </body>
+</html>
