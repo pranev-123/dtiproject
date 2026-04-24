@@ -1707,15 +1707,18 @@
                     <table class="simple-table" style="font-size:11px; margin:0;">
                       <thead>
                         <tr>
+                          <th>S.No</th>
                           <th>Register</th>
                           <th>Score Value (Live)</th>
                           <th>Average</th>
+                          <th>Threshold Value</th>
+                          <th>Status</th>
                           <th>Mode</th>
                           <th>Source</th>
                         </tr>
                       </thead>
                       <tbody id="individualScoreBody">
-                        <tr><td colspan="5" class="hint" style="padding:10px;">No student data yet.</td></tr>
+                        <tr><td colspan="8" class="hint" style="padding:10px;">No student data yet.</td></tr>
                       </tbody>
                     </table>
                   </div>
@@ -3232,15 +3235,20 @@
         const list = Array.isArray(rows) ? rows : [];
         individualScoreBody.innerHTML = '';
         if (!list.length) {
-          individualScoreBody.innerHTML = '<tr><td colspan="5" class="hint" style="padding:10px;">No student data yet.</td></tr>';
+          individualScoreBody.innerHTML = '<tr><td colspan="8" class="hint" style="padding:10px;">No student data yet.</td></tr>';
           return;
         }
-        list.forEach((r) => {
+        list.forEach((r, idx) => {
+          const thresholdValue = Number(r.thresholdValue != null ? r.thresholdValue : (r.currentScore != null ? r.currentScore : 0));
+          const thresholdStatus = String(r.thresholdLabel || (thresholdValue > 50 ? 'RAISING' : thresholdValue < 45 ? 'FALLING' : 'STABLE'));
           const tr = document.createElement('tr');
           tr.innerHTML =
+            '<td>' + escapeHtml(String(idx + 1)) + '</td>' +
             '<td>' + escapeHtml(String(r.registerNumber || '—')) + '</td>' +
             '<td>' + escapeHtml(String(r.currentScore != null ? (Number(r.currentScore).toFixed(2) + '%') : '—')) + '</td>' +
             '<td>' + escapeHtml(String(r.averageAttention != null ? (Number(r.averageAttention).toFixed(2) + '%') : '—')) + '</td>' +
+            '<td>' + escapeHtml(String(Number(thresholdValue).toFixed(2) + '%')) + '</td>' +
+            '<td>' + escapeHtml(thresholdStatus) + '</td>' +
             '<td>' + escapeHtml(String(r.mode || 'recovering')) + '</td>' +
             '<td>' + escapeHtml(String(r.sourceType || 'live_camera')) + '</td>';
           individualScoreBody.appendChild(tr);

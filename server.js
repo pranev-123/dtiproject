@@ -6244,6 +6244,55 @@ function classifyStudentAttentionMode(row) {
   return 'recovering';
 }
 
+function classifyThresholdSignal(scoreValue) {
+  const score = Number(Number(scoreValue || 0).toFixed(2));
+  if (score > 50) {
+    return {
+      thresholdValue: score,
+      thresholdLabel: 'RAISING',
+      thresholdMessage: 'Attention values are raising',
+    };
+  }
+  if (score < 45) {
+    return {
+      thresholdValue: score,
+      thresholdLabel: 'FALLING',
+      thresholdMessage: 'Attention values are falling down',
+    };
+  }
+  return {
+    thresholdValue: score,
+    thresholdLabel: 'STABLE',
+    thresholdMessage: 'Attention values are steady',
+  };
+}
+
+function buildStudentThresholdRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.map((row, idx) => ({
+    sNo: idx + 1,
+    registerNumber: String(row.registerNumber || '').trim(),
+    thresholdValue: Number(Number(row.currentScore || 0).toFixed(2)),
+    thresholdLabel: String(row.thresholdLabel || 'STABLE'),
+    thresholdMessage: String(row.thresholdMessage || 'Attention values are steady'),
+  }));
+}
+
+function buildStudentThresholdCsv(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const header = ['S.No', 'Register Number', 'Threshold Value (%)', 'Threshold Status', 'Message'];
+  const csvRows = list.map((row) => ([
+    row.sNo,
+    row.registerNumber,
+    Number(row.thresholdValue || 0).toFixed(2),
+    row.thresholdLabel || 'STABLE',
+    row.thresholdMessage || 'Attention values are steady',
+  ]));
+  return [header, ...csvRows]
+    .map((cols) => cols.map((val) => `"${String(val == null ? '' : val).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+}
+
 function computeStudentScoreRowsLast60(sessionObj, nowMs) {
   if (!sessionObj || !sessionObj.studentAttentionHistory || typeof sessionObj.studentAttentionHistory !== 'object') return [];
   const now = Number(nowMs) || Date.now();
@@ -6264,6 +6313,10 @@ function computeStudentScoreRowsLast60(sessionObj, nowMs) {
       lastUpdatedAt: last.t || null,
     };
     row.mode = classifyStudentAttentionMode(row);
+    const thresholdMeta = classifyThresholdSignal(row.currentScore);
+    row.thresholdValue = thresholdMeta.thresholdValue;
+    row.thresholdLabel = thresholdMeta.thresholdLabel;
+    row.thresholdMessage = thresholdMeta.thresholdMessage;
     rows.push(row);
   });
   rows.sort((a, b) => b.currentScore - a.currentScore);
@@ -7961,6 +8014,19 @@ async function buildSessionPdfBuffer(summary, attentionHistory) {
       doc.font('Helvetica-Bold').text('Attendance (Hybrid):', { continued: false });
       doc.font('Helvetica').text(`Total: ${summary.attendanceTotal} | Present: ${summary.attendancePresent || 0} | Absent: ${summary.attendanceAbsent || 0} | OD: ${summary.attendanceOD || 0}`, { continued: false });
     }
+    if (Array.isArray(summary.studentThresholdRows) && summary.studentThresholdRows.length > 0) {
+      const maxRowsForPdf = 15;
+      doc.moveDown(0.7);
+      doc.font('Helvetica-Bold').text('Individual Student Threshold Signals', { continued: false });
+      doc.font('Helvetica').fontSize(10).text('S.No | Register Number | Threshold Value | Status', { continued: false });
+      summary.studentThresholdRows.slice(0, maxRowsForPdf).forEach((row) => {
+        const thresholdValue = Number(row.thresholdValue || 0).toFixed(2);
+        doc.text(`${row.sNo}. ${row.registerNumber} | ${thresholdValue}% | ${row.thresholdLabel}`, { continued: false });
+      });
+      if (summary.studentThresholdRows.length > maxRowsForPdf) {
+        doc.text(`... and ${summary.studentThresholdRows.length - maxRowsForPdf} more rows in SMTP attachment/report export.`);
+      }
+    }
     doc.moveDown(2);
 
     // Always show graph and pie: use synthetic 2-point data when history has 0 or 1 point
@@ -8606,6 +8672,9 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
   const ranking = computeStudentTopAndBottomLast60s(s, Date.now());
   summary.studentTop5Last60s = ranking.top5;
   summary.studentBottom5Last60s = ranking.bottom5;
+  const studentScoreRowsForSummary = computeStudentScoreRowsLast60(s, Date.now());
+  const studentThresholdRows = buildStudentThresholdRows(studentScoreRowsForSummary);
+  summary.studentThresholdRows = studentThresholdRows;
   let rankingPdfBuffer = null;
   try {
     rankingPdfBuffer = await buildStudentRankingPdfBuffer(summary, ranking);
@@ -8650,6 +8719,12 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
     `Attention drop timings: ${attentionDropLine}`,
     `Best engagement period start: ${summary.bestEngagementStart || 'Not available'}`,
     `Best engagement average: ${summary.bestEngagementAverage}`,
+    '',
+    'Individual threshold values (last 60s):',
+    'S.No | Register Number | Threshold Value | Status | Message',
+    ...(studentThresholdRows.length
+      ? studentThresholdRows.map((row) => `${row.sNo} | ${row.registerNumber} | ${Number(row.thresholdValue || 0).toFixed(2)}% | ${row.thresholdLabel} | ${row.thresholdMessage}`)
+      : ['No student threshold values available for this session.']),
     pdfBuffer ? '\nPlease see the attached PDF for the full report and trend graph.' : '',
     rankingPdfBuffer ? 'The Top 5 and Bottom 5 student attention report (last 60 seconds) is attached as a separate PDF.' : '',
     quizPollPdfBuffer ? 'Quiz and poll results PDF is attached.' : '',
@@ -8689,6 +8764,14 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
         mailOptions.attachments.push({
           filename: `quiz-poll-results-${summary.topic.replace(/\s+/g, '-')}.xlsx`,
           content: quizPollExcelBuffer,
+        });
+      }
+      const thresholdCsv = buildStudentThresholdCsv(studentThresholdRows);
+      if (thresholdCsv) {
+        if (!mailOptions.attachments) mailOptions.attachments = [];
+        mailOptions.attachments.push({
+          filename: `student-threshold-values-last60s-${summary.topic.replace(/\s+/g, '-')}.csv`,
+          content: Buffer.from(thresholdCsv, 'utf8'),
         });
       }
       await transporter.sendMail(mailOptions);
