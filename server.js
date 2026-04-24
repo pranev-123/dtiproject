@@ -12,6 +12,10 @@ const crypto = require('crypto');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+let createSocketRedisAdapter = null;
+try { ({ createAdapter: createSocketRedisAdapter } = require('@socket.io/redis-adapter')); } catch (_) { createSocketRedisAdapter = null; }
+let createRedisClient = null;
+try { ({ createClient: createRedisClient } = require('redis')); } catch (_) { createRedisClient = null; }
 const session = require('express-session');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -100,6 +104,7 @@ const PREDICTION_HISTORY_SIZE = 10;
 const PREDICTION_SAMPLE_INTERVAL_MS = 5 * 1000; // 5 seconds
 const PREDICTION_CONSECUTIVE_NEGATIVE = 4;
 const PREDICTION_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+const ATTENTION_MIN_PUSH_INTERVAL_MS = Math.max(1000, Number(process.env.ATTENTION_MIN_PUSH_INTERVAL_MS || 3000));
 
 const app = express();
 const server = http.createServer(app);
@@ -232,9 +237,12 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const MONGO_URI = String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim();
 const MONGO_DB_NAME = String(process.env.MONGODB_DB || 'dti').trim();
+const REDIS_URL = String(process.env.REDIS_URL || '').trim();
 let mongoClient = null;
 let mongoDb = null;
 let mongoCollections = null;
+let redisPubClient = null;
+let redisSubClient = null;
 const OD_DIR = path.join(DATA_DIR, 'od-proofs');
 const OD_VERIFICATION_DIR = path.join(DATA_DIR, 'od-verification-proofs');
 const PROFILE_DIR = path.join(DATA_DIR, 'profile-images');
@@ -388,6 +396,34 @@ loadDatabase();
 runBackgroundTask('Initialize MongoDB', async () => {
   await initMongo();
 });
+runBackgroundTask('Initialize Socket.IO Redis adapter', async () => {
+  await initSocketRedisAdapter();
+});
+
+async function initSocketRedisAdapter() {
+  if (!REDIS_URL) return;
+  if (!createRedisClient || !createSocketRedisAdapter) {
+    console.warn('REDIS_URL is set but redis adapter dependencies are missing. Continuing with in-memory Socket.IO adapter.');
+    return;
+  }
+  try {
+    redisPubClient = createRedisClient({ url: REDIS_URL });
+    redisSubClient = redisPubClient.duplicate();
+    await Promise.all([redisPubClient.connect(), redisSubClient.connect()]);
+    io.adapter(createSocketRedisAdapter(redisPubClient, redisSubClient));
+    console.log(`Socket.IO Redis adapter connected (${REDIS_URL})`);
+  } catch (err) {
+    console.error('Socket.IO Redis adapter init failed; continuing with in-memory adapter:', err.message || err);
+    if (redisPubClient) {
+      try { await redisPubClient.quit(); } catch (_) {}
+    }
+    if (redisSubClient) {
+      try { await redisSubClient.quit(); } catch (_) {}
+    }
+    redisPubClient = null;
+    redisSubClient = null;
+  }
+}
 
 async function initMongo() {
   if (!MONGO_URI || !MongoClient) {
@@ -410,6 +446,8 @@ async function initMongo() {
       mongoCollections.sessions.createIndex({ ownerEmail: 1, createdAt: -1 }),
       mongoCollections.attentionEvents.createIndex({ sessionId: 1, timestamp: -1 }),
       mongoCollections.attentionEvents.createIndex({ sessionId: 1, studentRegisterNumber: 1, timestamp: -1 }),
+      mongoCollections.attentionEvents.createIndex({ studentId: 1, timestamp: -1 }),
+      mongoCollections.attentionEvents.createIndex({ studentRegisterNumber: 1, timestamp: -1 }),
     ]);
     await hydratePersistentStateFromMongo();
     console.log(`MongoDB connected (${MONGO_DB_NAME})`);
@@ -524,6 +562,7 @@ function persistAttentionEventToMongo(sessionObj, payload) {
     score: Number(payload.score || 0),
     source: String(payload.source || 'unknown'),
     studentRegisterNumber: payload.studentRegisterNumber ? String(payload.studentRegisterNumber) : null,
+    studentId: payload.studentRegisterNumber ? String(payload.studentRegisterNumber) : null,
     sourceType: payload.sourceType ? String(payload.sourceType) : null,
     deviceHash: payload.deviceHash ? String(payload.deviceHash) : null,
     createdAt: new Date(),
@@ -5727,6 +5766,7 @@ app.post('/api/session/start', ensureAuthenticated, (req, res) => {
     classroomActivities: [], // [{id,type,question,options,optionCounts,responsesByRegister,createdAt,sessionId}]
     behaviorAlerts: [],
     behaviorAlertCooldownByKey: {},
+    lastAttentionSampleAtByKey: {},
   };
 
   // Keep global active session in sync with HTTP start (students poll /api/session-status; Socket may be late).
@@ -6121,9 +6161,23 @@ app.post('/api/attention/public', (req, res) => {
   if (Number.isNaN(numericScore)) {
     return res.status(400).json({ ok: false, message: 'Invalid score.' });
   }
-  const t = timestamp || new Date().toISOString();
-  const entry = { t, score: numericScore };
   const regKey = String(studentRegisterNumber || '').trim();
+  const t = timestamp || new Date().toISOString();
+  const nowMs = Date.now();
+  const sampleKey = regKey
+    ? `reg:${regKey}`
+    : deviceId
+      ? `device:${security.hashData(String(deviceId))}`
+      : 'anon';
+  if (!s.lastAttentionSampleAtByKey || typeof s.lastAttentionSampleAtByKey !== 'object') {
+    s.lastAttentionSampleAtByKey = {};
+  }
+  const lastSampleAt = Number(s.lastAttentionSampleAtByKey[sampleKey] || 0);
+  if (lastSampleAt && (nowMs - lastSampleAt) < ATTENTION_MIN_PUSH_INTERVAL_MS) {
+    return res.json({ ok: true, throttled: true, minIntervalMs: ATTENTION_MIN_PUSH_INTERVAL_MS });
+  }
+  s.lastAttentionSampleAtByKey[sampleKey] = nowMs;
+  const entry = { t, score: numericScore };
   if (regKey) entry.studentRegisterNumber = regKey;
   if (sourceType) entry.sourceType = String(sourceType).trim();
   if (gaze != null) entry.gaze = gaze;
