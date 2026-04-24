@@ -248,6 +248,7 @@ const OD_VERIFICATION_DIR = path.join(DATA_DIR, 'od-verification-proofs');
 const PROFILE_DIR = path.join(DATA_DIR, 'profile-images');
 const STUDENT_DOCS_DIR = path.join(DATA_DIR, 'student-documents');
 const FEED_MEDIA_DIR = path.join(DATA_DIR, 'feed-media');
+const SLEEP_ALERT_DIR = path.join(DATA_DIR, 'sleep-alerts');
 try {
   if (!fs.existsSync(OD_VERIFICATION_DIR)) {
     fs.mkdirSync(OD_VERIFICATION_DIR, { recursive: true });
@@ -260,6 +261,9 @@ try {
   }
   if (!fs.existsSync(FEED_MEDIA_DIR)) {
     fs.mkdirSync(FEED_MEDIA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(SLEEP_ALERT_DIR)) {
+    fs.mkdirSync(SLEEP_ALERT_DIR, { recursive: true });
   }
 } catch (_) {
   // Directory creation is best-effort.
@@ -5780,6 +5784,104 @@ app.post('/api/session/start', ensureAuthenticated, (req, res) => {
   return res.json({ ok: true, sessionId: id });
 });
 
+function parseSnapshotDataUrl(dataUrl) {
+  const raw = String(dataUrl || '').trim();
+  if (!raw.startsWith('data:image/')) return null;
+  const m = raw.match(/^data:(image\/(?:jpeg|jpg|png));base64,([A-Za-z0-9+/=\s]+)$/i);
+  if (!m) return null;
+  const mime = String(m[1] || '').toLowerCase();
+  const ext = mime.includes('png') ? 'png' : 'jpg';
+  const b64 = String(m[2] || '').replace(/\s+/g, '');
+  const buf = Buffer.from(b64, 'base64');
+  if (!buf || !buf.length || buf.length > (2 * 1024 * 1024)) return null;
+  return { ext, buf };
+}
+
+function buildSleepReportRows(sessionObj) {
+  const events = Array.isArray(sessionObj && sessionObj.behaviorAlerts) ? sessionObj.behaviorAlerts : [];
+  return events
+    .filter((e) => e && e.type === 'sleep_detected')
+    .map((e, idx) => ({
+      sNo: idx + 1,
+      registerNumber: String(e.registerNumber || '-'),
+      topic: String(e.topic || sessionObj.topic || '-'),
+      venue: String(e.venue || sessionObj.venue || '-'),
+      at: String(e.at || ''),
+      imagePath: e.snapshotPath && fs.existsSync(e.snapshotPath) ? e.snapshotPath : null,
+    }));
+}
+
+async function buildSleepDetectionPdfBuffer(summary, rows) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 42, size: 'A4' });
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const logoPath = publicPath('rec-logo.jpg');
+    if (fs.existsSync(logoPath)) {
+      try { doc.image(logoPath, doc.page.margins.left, 34, { width: 62 }); } catch (_) {}
+    }
+    doc.fontSize(13).font('Helvetica-Bold').text('Rajalakshmi Engineering College ( An Autonomous Institution)', 118, 46);
+    doc.moveDown(1.8);
+    doc.fontSize(15).font('Helvetica-Bold').text('Sleep Detection Report', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica')
+      .text(`Topic: ${summary.topic || '—'}`)
+      .text(`Venue: ${summary.venue || '—'}`)
+      .text(`Session ID: ${summary.sessionId || '—'}`)
+      .text(`Generated at: ${new Date(summary.generatedAt || Date.now()).toLocaleString('en-IN')}`);
+    doc.moveDown(0.7);
+
+    doc.fontSize(10).font('Helvetica-Bold').text('S.No | Register Number | Topic | Venue | Time');
+    doc.moveDown(0.2);
+    if (!rows.length) {
+      doc.font('Helvetica').text('No sleep detection records available for this session.');
+      doc.moveDown(0.8);
+    }
+    rows.forEach((row) => {
+      const when = row.at ? new Date(row.at).toLocaleString('en-IN') : '—';
+      doc.font('Helvetica').fontSize(10).text(
+        `${row.sNo}. ${row.registerNumber} | ${row.topic} | ${row.venue} | ${when}`,
+      );
+      if (row.imagePath && fs.existsSync(row.imagePath)) {
+        try {
+          doc.moveDown(0.2);
+          doc.image(row.imagePath, { fit: [180, 120], align: 'left' });
+        } catch (_) {
+          doc.fontSize(9).fillColor('#B91C1C').text('Student snapshot could not be rendered.');
+          doc.fillColor('#000000');
+        }
+      } else {
+        doc.fontSize(9).fillColor('#6B7280').text('Student image not available.');
+        doc.fillColor('#000000');
+      }
+      doc.moveDown(0.6);
+      if (doc.y > 700) doc.addPage();
+    });
+
+    const signaturePayload = JSON.stringify({
+      sessionId: summary.sessionId || '',
+      topic: summary.topic || '',
+      venue: summary.venue || '',
+      generatedAt: summary.generatedAt || '',
+      rows: rows.map((r) => ({ sNo: r.sNo, registerNumber: r.registerNumber, topic: r.topic, venue: r.venue, at: r.at || '' })),
+    });
+    const reportHash = security.hashData(signaturePayload);
+    const reportSignature = security.signData(reportHash);
+    doc.moveDown(0.8);
+    doc.moveTo(doc.page.margins.left, doc.y).lineTo(560, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc.font('Helvetica-Bold').fontSize(11).text('Digital Signature');
+    doc.font('Helvetica').fontSize(9).text(`Signature Hash: ${reportHash.slice(0, 48)}...`);
+    doc.text('Signature Algorithm: RSA-2048 SHA256');
+    doc.text(`Signature: ${String(reportSignature || '').slice(0, 72)}...`);
+    doc.text('Signed By: AI Classroom Attention System');
+    doc.end();
+  });
+}
+
 app.post('/api/student/behavior-alert', (req, res) => {
   if (!req.session || !req.session.studentEmail || !req.session.studentId) {
     return res.status(401).json({ ok: false, message: 'Please sign in as student.' });
@@ -5807,6 +5909,19 @@ app.post('/api/student/behavior-alert', (req, res) => {
   if (!Array.isArray(s.behaviorAlerts)) s.behaviorAlerts = [];
   const atIso = new Date(now).toISOString();
   const label = type === 'sleep_detected' ? 'Sleep detected' : 'Headset not detected';
+  let snapshotPath = null;
+  if (type === 'sleep_detected') {
+    const parsedSnapshot = parseSnapshotDataUrl(req.body && req.body.snapshotDataUrl);
+    if (parsedSnapshot) {
+      try {
+        const fname = `sleep-${sessionId}-${registerNumber || 'unknown'}-${now}-${crypto.randomBytes(3).toString('hex')}.${parsedSnapshot.ext}`;
+        snapshotPath = path.join(SLEEP_ALERT_DIR, fname);
+        fs.writeFileSync(snapshotPath, parsedSnapshot.buf);
+      } catch (_) {
+        snapshotPath = null;
+      }
+    }
+  }
   const event = {
     type,
     label,
@@ -5817,11 +5932,55 @@ app.post('/api/student/behavior-alert', (req, res) => {
     topic: String(s.topic || ''),
     venue: String(s.venue || ''),
     ownerEmail: String(s.ownerEmail || ''),
+    snapshotPath: snapshotPath || null,
   };
   s.behaviorAlerts.push(event);
   if (s.behaviorAlerts.length > 200) s.behaviorAlerts = s.behaviorAlerts.slice(-200);
   emitSessionScoped('student-behavior-alert', sessionId, event);
   runBackgroundTask('Behavior alert email to faculty', async () => {
+    if (type === 'sleep_detected' && smtpConfigured) {
+      const reportRows = buildSleepReportRows(s);
+      const reportSummary = {
+        sessionId,
+        topic: event.topic || '',
+        venue: event.venue || '',
+        generatedAt: new Date().toISOString(),
+      };
+      let pdfBuffer = null;
+      try {
+        pdfBuffer = await buildSleepDetectionPdfBuffer(reportSummary, reportRows);
+      } catch (err) {
+        console.error('Failed to generate sleep detection PDF:', err);
+      }
+      const pub = normalizeEmailBaseUrl(process.env.PUBLIC_BASE_URL) || normalizeEmailBaseUrl(process.env.SERVER_URL);
+      const reportUrl = pub
+        ? `${pub}/api/session/${encodeURIComponent(sessionId)}/sleep-detection-report`
+        : '';
+      const subject = 'sleep detected during class hours';
+      const body =
+        `Sleep detected during class hours.\n\n`
+        + `Register number: ${registerNumber || '-'}\n`
+        + `Student name: ${studentName || '-'}\n`
+        + `Time: ${new Date(atIso).toLocaleString('en-IN')}\n`
+        + `Venue: ${event.venue || '-'}\n`
+        + `Topic: ${event.topic || '-'}\n`
+        + `Session ID: ${sessionId}\n`
+        + (reportUrl ? `Download link: ${reportUrl}\n` : '');
+      const mailOptions = {
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+        to: String(s.ownerEmail || ''),
+        subject,
+        text: body,
+      };
+      if (pdfBuffer) {
+        mailOptions.attachments = [{
+          filename: `sleep-detection-report-${sessionId}.pdf`,
+          content: pdfBuffer,
+        }];
+      }
+      await transporter.sendMail(mailOptions);
+      return;
+    }
     const subject = `REC Student Alert: ${label} (${registerNumber || 'Unknown'})`;
     const body =
       `Student behavior alert during session.\n\n`
@@ -8882,6 +9041,32 @@ app.get('/api/session/:id/report', ensureAuthenticated, async (req, res) => {
   } catch (err) {
     console.error('Error generating session report PDF', err);
     res.status(500).json({ ok: false, message: 'Failed to generate report.' });
+  }
+});
+
+// Download sleep detection report PDF for a session.
+app.get('/api/session/:id/sleep-detection-report', ensureAuthenticated, async (req, res) => {
+  const sessionId = req.params.id;
+  const s = sessions[sessionId];
+  if (!s || s.ownerEmail !== req.session.userEmail) {
+    return res.status(404).json({ ok: false, message: 'Session not found.' });
+  }
+  const rows = buildSleepReportRows(s);
+  const summary = {
+    sessionId,
+    topic: String(s.topic || ''),
+    venue: String(s.venue || ''),
+    generatedAt: new Date().toISOString(),
+  };
+  try {
+    const pdfBuffer = await buildSleepDetectionPdfBuffer(summary, rows);
+    const filename = `sleep-detection-report-${(s.topic || sessionId).replace(/\s+/g, '-')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error generating sleep detection report PDF', err);
+    return res.status(500).json({ ok: false, message: 'Failed to generate sleep detection report.' });
   }
 });
 

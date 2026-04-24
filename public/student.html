@@ -3905,14 +3905,37 @@
         const last = Number(lastBehaviorAlertSentAt[type] || 0);
         if (now - last < BEHAVIOR_ALERT_COOLDOWN_MS) return;
         lastBehaviorAlertSentAt[type] = now;
+        let snapshotDataUrl = null;
+        if (type === 'sleep_detected') {
+          snapshotDataUrl = captureBehaviorSnapshotDataUrl();
+        }
         try {
           await fetch('/api/student/behavior-alert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ sessionId: currentSessionId, type }),
+            body: JSON.stringify({ sessionId: currentSessionId, type, snapshotDataUrl }),
           });
         } catch (_) {}
+      }
+
+      function captureBehaviorSnapshotDataUrl() {
+        try {
+          if (!localVideo || localVideo.readyState < 2 || !localVideo.videoWidth || !localVideo.videoHeight) return null;
+          const maxW = 480;
+          const scale = Math.min(1, maxW / localVideo.videoWidth);
+          const w = Math.max(120, Math.round(localVideo.videoWidth * scale));
+          const h = Math.max(90, Math.round(localVideo.videoHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          ctx.drawImage(localVideo, 0, 0, w, h);
+          return canvas.toDataURL('image/jpeg', 0.72);
+        } catch (_) {
+          return null;
+        }
       }
 
       function setupSocket() {

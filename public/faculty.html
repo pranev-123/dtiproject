@@ -5791,6 +5791,15 @@
               a4.style.fontSize = '12px';
               li.appendChild(sep4);
               li.appendChild(a4);
+              const sep5 = document.createTextNode(' ');
+              const a5 = document.createElement('a');
+              a5.href = '/api/session/' + encodeURIComponent(s.id) + '/sleep-detection-report';
+              a5.textContent = 'Download Sleep Detection PDF';
+              a5.setAttribute('download', 'sleep-detection-report-' + (s.topic || 'session').replace(/\s+/g, '-') + '.pdf');
+              a5.style.marginLeft = '6px';
+              a5.style.fontSize = '12px';
+              li.appendChild(sep5);
+              li.appendChild(a5);
             }
             historyList.appendChild(li);
           });

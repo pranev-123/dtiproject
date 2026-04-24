@@ -10,6 +10,7 @@ data/od-verification-proofs/
 data/profile-images/
 data/student-documents/
 data/feed-media/
+data/sleep-alerts/
 certs/*.pem
 deployment/secrets/*
 !deployment/secrets/.gitkeep
