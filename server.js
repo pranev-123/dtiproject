@@ -6016,6 +6016,7 @@ app.post('/api/session/start', ensureAuthenticated, (req, res) => {
     alerts: [], // { t, message }
     deviceIds: {}, // deviceId -> lastSeen (ISO) for connected-device count
     closed: false,
+    paused: false,
     // Zone-level attention (privacy-safe: no identities, no counts, only aggregate per zone)
     zoneHistory: {
       frontBench: [],
@@ -6643,6 +6644,9 @@ app.post('/api/attention', ensureAuthenticated, (req, res) => {
   if (s.closed) {
     return res.status(400).json({ ok: false, message: 'Session is already closed.' });
   }
+  if (s.paused) {
+    return res.status(409).json({ ok: false, paused: true, message: 'Session is paused.' });
+  }
 
   const numericScore = Number(score);
   if (Number.isNaN(numericScore)) {
@@ -6724,6 +6728,9 @@ app.post('/api/attention/public', (req, res) => {
   }
   if (s.closed) {
     return res.status(400).json({ ok: false, message: 'Session is already closed.' });
+  }
+  if (s.paused) {
+    return res.status(409).json({ ok: false, paused: true, message: 'Session is paused.' });
   }
     if (payloadHash && security.integrityHash(encryptedData) !== payloadHash) {
       return res.status(400).json({ ok: false, message: 'Integrity check failed.' });
@@ -7716,6 +7723,7 @@ app.get('/api/sessions/active', ensureAuthenticated, (req, res) => {
         id: s.id,
         topic: s.topic,
         venue: s.venue,
+        paused: !!s.paused,
         deviceCount: pruneDeviceIds(s),
         averageAttention: Number(avg.toFixed(2)),
         // Role information for this logged-in faculty (owner vs viewer/co-host)
@@ -7744,8 +7752,39 @@ app.get('/api/session-status', (req, res) => {
     ok: true,
     active: globalSessionActive,
     sessionId: activeId,
+    paused: !!(activeSession && activeSession.paused),
     latestClassroomActivity: safeActivity,
   });
+});
+
+app.post('/api/session/pause', ensureAuthenticated, (req, res) => {
+  const sessionId = String((req.body && req.body.sessionId) || '').trim();
+  const s = sessions[sessionId];
+  if (!s || s.ownerEmail !== req.session.userEmail) {
+    return res.status(404).json({ ok: false, message: 'Session not found.' });
+  }
+  if (s.closed) return res.status(400).json({ ok: false, message: 'Session is already closed.' });
+  if (s.paused) return res.json({ ok: true, paused: true, sessionId });
+
+  s.paused = true;
+  emitSessionScoped('session-status', sessionId, { status: 'paused', sessionId });
+  persistSessionToMongo(s);
+  return res.json({ ok: true, paused: true, sessionId });
+});
+
+app.post('/api/session/resume', ensureAuthenticated, (req, res) => {
+  const sessionId = String((req.body && req.body.sessionId) || '').trim();
+  const s = sessions[sessionId];
+  if (!s || s.ownerEmail !== req.session.userEmail) {
+    return res.status(404).json({ ok: false, message: 'Session not found.' });
+  }
+  if (s.closed) return res.status(400).json({ ok: false, message: 'Session is already closed.' });
+  if (!s.paused) return res.json({ ok: true, paused: false, sessionId });
+
+  s.paused = false;
+  emitSessionScoped('session-status', sessionId, { status: 'resumed', sessionId });
+  persistSessionToMongo(s);
+  return res.json({ ok: true, paused: false, sessionId });
 });
 
 // Smart attendance: student fetches session signing key for AES/HMAC (hybrid attendance encryption).
@@ -9202,6 +9241,7 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
   }
 
   s.closed = true;
+  s.paused = false;
 
   if (String(lastActiveSessionId) === String(sessionId)) {
     const ownerEmail = String(s.ownerEmail || '').trim().toLowerCase();

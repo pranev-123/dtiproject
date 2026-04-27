@@ -3988,6 +3988,31 @@
         // Keep assistant enabled even when session is active.
         socket.on('session-status', (data) => {
           setStudentHelpAndVoiceEnabled(true);
+          const status = String(data && data.status || '').toLowerCase();
+          if (!currentSessionId) return;
+          const eventSessionId = String(data && data.sessionId || '').trim();
+          if (eventSessionId && eventSessionId !== String(currentSessionId)) return;
+          if (status === 'paused') {
+            sessionCurrentlyActive = false;
+            stopAttentionLoop();
+            if (aiStatusText) aiStatusText.textContent = 'Session paused by faculty (fatigue/yawning detected). Waiting for resume.';
+            if (faceStatusText) {
+              faceStatusText.textContent = 'Face presence: paused (faculty will resume session)';
+              faceStatusText.className = 'hint face-status-paused';
+            }
+            updateSessionGateUI();
+            return;
+          }
+          if (status === 'resumed' || status === 'started') {
+            sessionCurrentlyActive = true;
+            startAttentionLoop();
+            if (aiStatusText) aiStatusText.textContent = 'Session resumed. Analysing gaze & posture when camera is on.';
+            if (faceStatusText) {
+              faceStatusText.textContent = 'Face presence: waiting for camera';
+              faceStatusText.className = 'hint';
+            }
+            updateSessionGateUI();
+          }
         });
         socket.on('classroom-activity', (activity) => {
           showClassroomActivityFlash(activity || {});

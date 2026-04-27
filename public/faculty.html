@@ -1647,6 +1647,9 @@
                     <button class="primary" type="submit" id="btnStartSession">
                       Start attention tracking
                     </button>
+                    <button class="secondary" type="button" id="btnResumeSession" disabled>
+                      Resume session
+                    </button>
                     <button class="secondary" type="button" id="btnEndSession" disabled>
                       End session &amp; report
                     </button>
@@ -2053,6 +2056,7 @@
       const alertList = document.getElementById('alertList');
       const sessionForm = document.getElementById('sessionForm');
       const btnStartSession = document.getElementById('btnStartSession');
+      const btnResumeSession = document.getElementById('btnResumeSession');
       const btnEndSession = document.getElementById('btnEndSession');
       const blockSelect = document.getElementById('blockSelect');
       const floorSelect = document.getElementById('floorSelect');
@@ -3853,12 +3857,15 @@
       const FACULTY_EAR_CLOSED = 0.2;
       const FACULTY_EAR_OPEN = 0.25;
       const FACULTY_SLEEP_STREAK_MS = 5000;
+      const FACULTY_YAWN_MAR_THRESHOLD = 0.62;
+      const FACULTY_YAWN_STREAK_MS = 3500;
       const FACULTY_FATIGUE_INTERVAL_MS = 880;
       const FACULTY_FATIGUE_COOLDOWN_MS = 120000;
       let facultyLandmarkModelsReady = false;
       let facultyLandmarkModelsLoading = null;
       let facultyFatigueTimer = null;
       let facultyFatigueSleepStreakMs = 0;
+      let facultyFatigueYawnStreakMs = 0;
       let facultyFatigueLastTs = 0;
       let lastFacultyFatigueAlertSent = 0;
       let facultyFatigueHiddenCanvas = null;
@@ -3869,6 +3876,7 @@
           facultyFatigueTimer = null;
         }
         facultyFatigueSleepStreakMs = 0;
+        facultyFatigueYawnStreakMs = 0;
         facultyFatigueLastTs = 0;
       }
 
@@ -3919,6 +3927,20 @@
         return ear <= FACULTY_EAR_CLOSED;
       }
 
+      function facultyMouthOpenFromLandmarks(landmarks) {
+        const mouth = landmarks && typeof landmarks.getMouth === 'function' ? landmarks.getMouth() : null;
+        if (!mouth || mouth.length < 12) return false;
+        const topInner = mouth[9] || mouth[3];
+        const bottomInner = mouth[15] || mouth[8];
+        const leftCorner = mouth[0];
+        const rightCorner = mouth[6];
+        if (!topInner || !bottomInner || !leftCorner || !rightCorner) return false;
+        const vertical = facultyDist(topInner, bottomInner);
+        const horizontal = Math.max(1, facultyDist(leftCorner, rightCorner));
+        const mar = vertical / horizontal;
+        return mar >= FACULTY_YAWN_MAR_THRESHOLD;
+      }
+
       async function facultyFatigueTick() {
         if (!currentSessionId || !classroomCameraEl || classroomCameraEl.readyState < 2) return;
         const ok = await ensureFacultyLandmarkModels();
@@ -3943,18 +3965,28 @@
           const dets = await faceapi.detectAllFaces(facultyFatigueHiddenCanvas, opts).withFaceLandmarks();
           if (!dets.length) {
             facultyFatigueSleepStreakMs = 0;
+            facultyFatigueYawnStreakMs = 0;
             return;
           }
           const best = dets[0];
           const closed = facultyEyesClosedFromLandmarks(best.landmarks);
+          const yawning = facultyMouthOpenFromLandmarks(best.landmarks);
           if (closed) facultyFatigueSleepStreakMs += dt;
           else facultyFatigueSleepStreakMs = 0;
+          if (yawning) facultyFatigueYawnStreakMs += dt;
+          else facultyFatigueYawnStreakMs = 0;
 
-          if (facultyFatigueSleepStreakMs >= FACULTY_SLEEP_STREAK_MS) {
+          const reasonType = facultyFatigueSleepStreakMs >= FACULTY_SLEEP_STREAK_MS
+            ? 'sleep'
+            : facultyFatigueYawnStreakMs >= FACULTY_YAWN_STREAK_MS
+              ? 'yawn'
+              : '';
+          if (reasonType) {
             if (now - lastFacultyFatigueAlertSent >= FACULTY_FATIGUE_COOLDOWN_MS) {
               lastFacultyFatigueAlertSent = now;
               facultyFatigueSleepStreakMs = 0;
-              void sendFacultyFatigueAlert();
+              facultyFatigueYawnStreakMs = 0;
+              void sendFacultyFatigueAlert(reasonType);
             }
           }
         } catch (e) {
@@ -3981,9 +4013,18 @@
         }
       }
 
-      async function sendFacultyFatigueAlert() {
+      async function sendFacultyFatigueAlert(reasonType) {
         const banner = document.getElementById('facultyFatigueBanner');
         if (banner) banner.style.display = 'block';
+        const reasonLabel = reasonType === 'yawn' ? 'yawning/fatigue' : 'sleep/fatigue';
+        if (sessionMediaRecorder && sessionMediaRecorder.state === 'recording') {
+          try {
+            sessionMediaRecorder.stop();
+          } catch (_) {}
+        }
+        const paused = await pauseCurrentSessionFromDashboard(
+          'Session auto-paused: possible ' + reasonLabel + ' detected. Resume when ready.'
+        );
         try {
           await fetch('/api/faculty/fatigue-alert', {
             method: 'POST',
@@ -3998,7 +4039,9 @@
         } catch (_) {}
         appendChatMessage(
           'bot',
-          'Classroom camera: possible fatigue signal (eyes closed). Take a short break if needed.'
+          paused
+            ? ('Classroom camera: possible ' + reasonLabel + ' detected. Session and recording auto-paused. Use Resume session to continue.')
+            : ('Classroom camera: possible ' + reasonLabel + ' detected. Please pause and resume manually if needed.')
         );
       }
 
@@ -4014,6 +4057,7 @@
       let sessionMediaRecorder = null;
       let sessionRecordedChunks = [];
       let sessionRecordingStartedAt = 0;
+      let currentSessionPaused = false;
       const btnStartSessionRecording = document.getElementById('btnStartSessionRecording');
       const btnStopSessionRecording = document.getElementById('btnStopSessionRecording');
       const sessionRecordingStatus = document.getElementById('sessionRecordingStatus');
@@ -4066,6 +4110,62 @@
           } catch (_) {}
         }
         sessionMediaRecorder = null;
+      }
+
+      async function pauseCurrentSessionFromDashboard(reason) {
+        if (!currentSessionId) return false;
+        try {
+          const res = await fetch('/api/session/pause', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ sessionId: currentSessionId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok !== true) {
+            throw new Error((data && data.message) || 'Could not pause session.');
+          }
+          currentSessionPaused = true;
+          if (btnResumeSession) btnResumeSession.disabled = false;
+          if (sessionRecordingStatus) {
+            sessionRecordingStatus.style.color = '#b45309';
+            sessionRecordingStatus.textContent = reason || 'Session paused.';
+          }
+          return true;
+        } catch (e) {
+          if (sessionRecordingStatus) {
+            sessionRecordingStatus.style.color = '#c0392b';
+            sessionRecordingStatus.textContent = e && e.message ? e.message : 'Pause failed.';
+          }
+          return false;
+        }
+      }
+
+      async function resumeCurrentSessionFromDashboard() {
+        if (!currentSessionId) return;
+        try {
+          const res = await fetch('/api/session/resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ sessionId: currentSessionId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok !== true) {
+            throw new Error((data && data.message) || 'Could not resume session.');
+          }
+          currentSessionPaused = false;
+          if (btnResumeSession) btnResumeSession.disabled = true;
+          if (sessionRecordingStatus) {
+            sessionRecordingStatus.style.color = '#1565c0';
+            sessionRecordingStatus.textContent = 'Session resumed. You can continue tracking and recording.';
+          }
+        } catch (e) {
+          if (sessionRecordingStatus) {
+            sessionRecordingStatus.style.color = '#c0392b';
+            sessionRecordingStatus.textContent = e && e.message ? e.message : 'Resume failed.';
+          }
+        }
       }
 
       if (btnStartSessionRecording && btnStopSessionRecording) {
@@ -5630,7 +5730,9 @@
           const data = await res.json();
           if (data.ok) {
             currentSessionId = data.sessionId;
+            currentSessionPaused = false;
             btnEndSession.disabled = false;
+            if (btnResumeSession) btnResumeSession.disabled = true;
             restartFacultyFatigueMonitoring();
             updateSessionRecordingMetaLine();
             applyClassroomConfig(selectedRoom);
@@ -5678,6 +5780,8 @@
               alert('Session ended. ' + emailMsg);
               btnStartSession.disabled = false;
               btnEndSession.disabled = true;
+              currentSessionPaused = false;
+              if (btnResumeSession) btnResumeSession.disabled = true;
               stopFacultyFatigueMonitoring();
               if (sessionMediaRecorder && sessionMediaRecorder.state === 'recording') {
                 try {
@@ -5701,6 +5805,12 @@
           alert('Server error while ending session.');
         }
       });
+
+      if (btnResumeSession) {
+        btnResumeSession.addEventListener('click', function () {
+          void resumeCurrentSessionFromDashboard();
+        });
+      }
 
       // Wiring for Smart Classroom Locator selectors
       if (blockSelect) {
@@ -5893,19 +6003,29 @@
           const data = await res.json();
           if (!data.ok) return;
           const list = data.sessions || [];
+          window.__activeSessionsCache = list;
           // If faculty refreshes mid-session, auto-select the first active session so pulse/map continue updating.
           if (list.length) {
             const hasCurrent = !!currentSessionId && list.some((s) => s.id === currentSessionId);
             if (!hasCurrent) {
               currentSessionId = list[0].id;
               btnEndSession.disabled = false;
+              currentSessionPaused = !!list[0].paused;
+              if (btnResumeSession) btnResumeSession.disabled = !currentSessionPaused;
               if (socket) socket.emit('set-active-session', { sessionId: currentSessionId });
               if (socket) socket.emit('join-session', { sessionId: currentSessionId });
               lastAlertsLength = 0;
             }
+            if (hasCurrent) {
+              const activeObj = list.find((x) => x && x.id === currentSessionId) || null;
+              currentSessionPaused = !!(activeObj && activeObj.paused);
+              if (btnResumeSession) btnResumeSession.disabled = !currentSessionPaused;
+            }
           } else {
             currentSessionId = null;
             btnEndSession.disabled = true;
+            currentSessionPaused = false;
+            if (btnResumeSession) btnResumeSession.disabled = true;
           }
           noActiveSessionsHint.style.display = list.length ? 'none' : 'block';
           sessionsList.innerHTML = '';
@@ -5913,7 +6033,7 @@
             const li = document.createElement('li');
             li.classList.toggle('active-session', s.id === currentSessionId);
             li.innerHTML = '<span class="session-topic">' + escapeHtml(s.topic) + '</span><div class="session-meta">' +
-              escapeHtml(s.venue) + ' · ' + s.deviceCount + ' device(s) · avg ' + s.averageAttention + '%</div>';
+              escapeHtml(s.venue) + ' · ' + s.deviceCount + ' device(s) · avg ' + s.averageAttention + '%' + (s.paused ? ' · paused' : '') + '</div>';
             li.addEventListener('click', () => switchSession(s.id));
             sessionsList.appendChild(li);
           });
@@ -5931,6 +6051,14 @@
       function switchSession(sessionId) {
         currentSessionId = sessionId;
         btnEndSession.disabled = !sessionId;
+        currentSessionPaused = false;
+        if (btnResumeSession) btnResumeSession.disabled = true;
+        const rows = Array.isArray(window.__activeSessionsCache) ? window.__activeSessionsCache : [];
+        const matched = rows.find((x) => x && x.id === sessionId);
+        if (matched) {
+          currentSessionPaused = !!matched.paused;
+          if (btnResumeSession) btnResumeSession.disabled = !currentSessionPaused;
+        }
         if (socket) socket.emit('set-active-session', { sessionId: sessionId || null });
         if (socket && sessionId) socket.emit('join-session', { sessionId });
         loadActiveSessions();
