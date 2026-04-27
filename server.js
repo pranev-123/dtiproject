@@ -3325,7 +3325,7 @@ const INNOVATION_STATIC_FALLBACK = {
     { id: 'studentLearningModeSection', title: 'Learning mode (device-local)', text: 'Listening, note-taking, or discussion mode stays on this device and is not shared as identity.' },
     { id: 'studentAttendanceSection', title: 'Smart attendance & history', text: 'Hybrid Present / Absent / OD with session history and refresh—aligned with faculty and leadership views.' },
     { id: 'studentOdSection', title: 'OD proof workflow', text: 'Structured on-duty uploads with Assistant HoD / HoD visibility and status tracking on your dashboard.' },
-    { id: 'studentConnectionSection', title: 'Timetable & venue awareness', text: 'Connection panel ties faculty presence to timetable-synced venue hints for the right class context.' },
+    { id: 'studentConnectionSection', title: 'Connection status', text: 'See whether the faculty dashboard is linked and active for your current session.' },
   ],
   faculty: [
     { id: 'cameraVideoWrap', title: 'Live student stream', text: 'Low-latency view of the signed-in student device with connection health for teaching decisions.' },
@@ -4711,10 +4711,6 @@ app.post('/api/automation/run', (req, res) => {
       const studentName = actor.rec && actor.rec.name ? String(actor.rec.name).trim() : '';
       const reg = req.session && req.session.studentId ? String(req.session.studentId).trim() : '';
 
-      const timetableUrl = actor.rec && actor.rec.timetableUrl ? String(actor.rec.timetableUrl).trim() : '';
-      const syncedVenue = actor.rec && actor.rec.syncedVenue ? String(actor.rec.syncedVenue).trim() : '';
-      const wantsTimetable = !timetableUrl || !syncedVenue;
-
       const actSessId = lastActiveSessionId;
       const actSess = actSessId && sessions[actSessId] ? sessions[actSessId] : null;
       const live = !!(actSess && globalSessionActive);
@@ -4768,40 +4764,13 @@ app.post('/api/automation/run', (req, res) => {
 
       actions.push({
         type: 'dashboard',
-        feature: 'student.timetable_venue',
+        feature: 'student.connection',
         dashboardPath: '/student',
-        title: 'Timetable & venue',
-        message: wantsTimetable
-          ? syncedVenue
-            ? 'Add or refresh your timetable URL so venue hints stay accurate.'
-            : 'Save your timetable URL and run sync so the dashboard can detect your venue.'
-          : `Timetable linked; last synced venue: ${syncedVenue || '—'}.`,
-        voiceText: wantsTimetable
-          ? 'Please sync your timetable from the student dashboard.'
-          : 'Your timetable and venue look configured.',
-        uiActions: wantsTimetable
-          ? ['open_chatbot', 'scroll_student_connection', 'open_timetable_sync']
-          : ['open_chatbot', 'scroll_student_connection'],
+        title: 'Connection status',
+        message: 'The connection panel shows whether the faculty dashboard is active for your session.',
+        voiceText: 'Check the connection panel on your student dashboard for faculty presence.',
+        uiActions: ['open_chatbot', 'scroll_student_connection'],
       });
-
-      // Timetable reminder.
-      if (wantsTimetable) {
-        const throttleKey = 'timetableReminderAt';
-        const due = canSendAutomationEmail(actor.rec, throttleKey, 24 * 60 * 60 * 1000);
-        actions.push({
-          type: 'reminder',
-          title: 'Timetable sync',
-          message: due ? 'Email reminder sent (timetable not synced yet).' : 'Timetable reminder throttle active; not emailed.',
-          voiceText: 'Please sync your timetable so the system can detect your venue.',
-          uiActions: ['open_chatbot', 'open_timetable_sync', 'scroll_student_connection'],
-        });
-        if (due) {
-          const subject = 'Action needed: sync your timetable';
-          const messageText = `Hello ${studentName || 'student'},\n\nPlease sync your timetable URL in the Student dashboard so the system can auto-detect your venue.\n\nRegister Number: ${reg || '-'}\n\nIf you already synced recently, you can ignore this email.`;
-          const ok = await sendAutomationEmail(studentEmail, subject, messageText);
-          appendAutomationLog(actor.rec, { at: nowIso, role: 'student', event: 'timetable_reminder_email', details: ok ? 'Sent' : 'Send failed' });
-        }
-      }
 
       // OD reminder for the currently active session.
       const activeSessionId = lastActiveSessionId;
@@ -4997,7 +4966,7 @@ app.post('/api/automation/run', (req, res) => {
 
     if (!actions.length) {
       const idleMessage = actorRole === 'student'
-        ? 'No pending reminders right now. Timetable sync and OD status are up to date.'
+        ? 'No pending reminders right now. OD status is up to date.'
         : actorRole === 'faculty'
           ? 'No pending AI agent checklist right now.'
           : 'No pending OD queue alerts right now.';

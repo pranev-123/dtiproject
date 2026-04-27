@@ -1075,7 +1075,6 @@
             <button type="button" class="student-profile-menu-item" id="studentProfileChangePasswordBtn">Change password</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileResumeDocsBtn">Resume & documents</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileViewNotesBtn">Subject topic notes</button>
-            <button type="button" class="student-profile-menu-item" id="studentProfileTimetableBtn">Timetable sync</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileFileToolsBtn">File tools</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileSupportBtn">Support / Contact us</button>
             <button type="button" class="student-profile-menu-item dti-profile-open-whatsapp" id="studentProfileWhatsappBtn" role="menuitem">
@@ -1170,7 +1169,6 @@
                   <span class="badge-dot" id="facultyDot"></span>
                   <span id="facultyStatusText">Waiting for faculty dashboard&hellip;</span>
                 </div>
-                <p class="hint" id="studentSyncedVenueText">Venue: not synced from timetable yet.</p>
                 <p class="hint" id="debugText"></p>
               </div>
             </div>
@@ -1425,27 +1423,6 @@
               </ul>
             </div>
             <div class="od-modal-status" id="changePasswordModalMessage" aria-live="polite"></div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <div class="od-modal-backdrop" id="timetableSyncModalBackdrop" role="dialog" aria-modal="true" aria-label="Timetable sync form">
-      <div class="od-modal">
-        <div class="od-modal-header">
-          <div class="od-modal-title">Timetable Sync</div>
-          <button type="button" class="od-modal-close" id="btnCloseTimetableSyncModal" aria-label="Close timetable sync form">×</button>
-        </div>
-        <div class="od-modal-body">
-          <form id="timetableSyncForm">
-            <label for="timetableUrlInput">Timetable URL</label>
-            <input type="url" id="timetableUrlInput" placeholder="https://example.com/my-timetable" required style="width:100%;box-sizing:border-box;border-radius:10px;border:1px solid rgba(36,19,95,0.18);padding:10px 12px;font-size:13px;outline:none;" />
-            <div class="od-modal-actions">
-              <button type="button" class="secondary" id="btnCancelTimetableSyncModal">Cancel</button>
-              <button type="submit" class="primary"><span class="neon-text">Sync timetable</span></button>
-            </div>
-            <div class="od-modal-note">Provide your timetable link. The system will fetch it and auto-detect your venue.</div>
-            <div class="od-modal-status" id="timetableSyncStatus" aria-live="polite"></div>
           </form>
         </div>
       </div>
@@ -1717,7 +1694,6 @@
       const odStatusHeadline = document.getElementById('odStatusHeadline');
       const odStatusDetail = document.getElementById('odStatusDetail');
       const btnRefreshOdStatus = document.getElementById('btnRefreshOdStatus');
-      const studentSyncedVenueText = document.getElementById('studentSyncedVenueText');
       const changePasswordModalBackdrop = document.getElementById('changePasswordModalBackdrop');
       const changePasswordPopupForm = document.getElementById('changePasswordPopupForm');
       const btnCloseChangePasswordModal = document.getElementById('btnCloseChangePasswordModal');
@@ -1733,7 +1709,6 @@
       const studentProfileChangePasswordBtn = document.getElementById('studentProfileChangePasswordBtn');
       const studentProfileResumeDocsBtn = document.getElementById('studentProfileResumeDocsBtn');
       const studentProfileViewNotesBtn = document.getElementById('studentProfileViewNotesBtn');
-      const studentProfileTimetableBtn = document.getElementById('studentProfileTimetableBtn');
       const studentProfileFileToolsBtn = document.getElementById('studentProfileFileToolsBtn');
       const studentProfileSupportBtn = document.getElementById('studentProfileSupportBtn');
       const studentProfileInboxBtn = document.getElementById('studentProfileInboxBtn');
@@ -1771,12 +1746,6 @@
       const resumeDocsModalBackdrop = document.getElementById('resumeDocsModalBackdrop');
       const btnCloseResumeDocsModal = document.getElementById('btnCloseResumeDocsModal');
       const btnCancelResumeDocsModal = document.getElementById('btnCancelResumeDocsModal');
-      const timetableSyncModalBackdrop = document.getElementById('timetableSyncModalBackdrop');
-      const timetableSyncForm = document.getElementById('timetableSyncForm');
-      const timetableUrlInput = document.getElementById('timetableUrlInput');
-      const timetableSyncStatus = document.getElementById('timetableSyncStatus');
-      const btnCloseTimetableSyncModal = document.getElementById('btnCloseTimetableSyncModal');
-      const btnCancelTimetableSyncModal = document.getElementById('btnCancelTimetableSyncModal');
       const studentYoutubeModalBackdrop = document.getElementById('studentYoutubeModalBackdrop');
       const btnCloseStudentYoutubeModal = document.getElementById('btnCloseStudentYoutubeModal');
       const btnCancelStudentYoutubeModal = document.getElementById('btnCancelStudentYoutubeModal');
@@ -1788,7 +1757,6 @@
       let odVoiceAnnouncementsEnabled = false;
       const OD_STATUS_POLL_MS = 2000; // OD status voice cadence requested: every 2 seconds
       let studentProfileState = { headline: '', profileImageUrl: '', name: '' };
-      let studentSyncedVenue = '';
       let helpFileContext = null;
 
       const yearEl = document.getElementById('year');
@@ -2583,11 +2551,6 @@
             studentProfileCircleInner.textContent = fallback;
           }
         }
-        if (studentSyncedVenueText) {
-          studentSyncedVenueText.textContent = studentSyncedVenue
-            ? `Venue: ${studentSyncedVenue} (from timetable)`
-            : 'Venue: not synced from timetable yet.';
-        }
       }
 
       async function loadStudentProfile() {
@@ -2600,8 +2563,6 @@
             profileImageUrl: String(data.profileImageUrl || '').trim(),
             name: String(data.name || '').trim(),
           };
-          studentSyncedVenue = String(data.syncedVenue || '').trim();
-          if (timetableUrlInput) timetableUrlInput.value = String(data.timetableUrl || '').trim();
           renderStudentProfile();
         } catch (_) {}
       }
@@ -2736,7 +2697,6 @@
       window.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && odModalBackdrop && odModalBackdrop.classList.contains('show')) closeOdModal();
         if (e.key === 'Escape' && changePasswordModalBackdrop && changePasswordModalBackdrop.classList.contains('show')) closeChangePasswordModal();
-        if (e.key === 'Escape' && timetableSyncModalBackdrop && timetableSyncModalBackdrop.classList.contains('show')) closeTimetableSyncModal();
         if (e.key === 'Escape' && resumeDocsModalBackdrop && resumeDocsModalBackdrop.classList.contains('show')) closeResumeDocsModal();
         if (e.key === 'Escape' && studentYoutubeModalBackdrop && studentYoutubeModalBackdrop.classList.contains('show')) closeStudentYoutubeModal();
       });
@@ -5257,12 +5217,6 @@
           openStudentNotesModal();
         });
       }
-      if (studentProfileTimetableBtn) {
-        studentProfileTimetableBtn.addEventListener('click', function () {
-          closeStudentProfileDropdown();
-          openTimetableSyncModal();
-        });
-      }
       if (studentProfileFileToolsBtn) {
         studentProfileFileToolsBtn.addEventListener('click', function () {
           closeStudentProfileDropdown();
@@ -5553,9 +5507,6 @@
                 case 'open_resume_documents':
                   if (typeof openResumeDocsModal === 'function') openResumeDocsModal();
                   break;
-                case 'open_timetable_sync':
-                  if (typeof openTimetableSyncModal === 'function') openTimetableSyncModal();
-                  break;
                 case 'open_od_form':
                   if (typeof openOdModal === 'function') openOdModal();
                   break;
@@ -5711,74 +5662,6 @@
           } catch (_) {
             changePasswordModalMessage.textContent = 'Unable to reach server. Try again.';
             changePasswordModalMessage.style.color = '#c0392b';
-          } finally {
-            if (submitBtn) submitBtn.disabled = false;
-          }
-        });
-      }
-
-      function openTimetableSyncModal() {
-        if (!timetableSyncModalBackdrop) return;
-        if (timetableSyncStatus) {
-          timetableSyncStatus.textContent = '';
-          timetableSyncStatus.style.color = '';
-        }
-        timetableSyncModalBackdrop.classList.add('show');
-        if (timetableUrlInput && typeof timetableUrlInput.focus === 'function') {
-          setTimeout(function () { timetableUrlInput.focus(); }, 40);
-        }
-      }
-      function closeTimetableSyncModal() {
-        if (!timetableSyncModalBackdrop) return;
-        timetableSyncModalBackdrop.classList.remove('show');
-      }
-      if (btnCloseTimetableSyncModal) btnCloseTimetableSyncModal.addEventListener('click', closeTimetableSyncModal);
-      if (btnCancelTimetableSyncModal) btnCancelTimetableSyncModal.addEventListener('click', closeTimetableSyncModal);
-      if (timetableSyncModalBackdrop) {
-        timetableSyncModalBackdrop.addEventListener('click', function (e) {
-          if (e.target === timetableSyncModalBackdrop) closeTimetableSyncModal();
-        });
-      }
-      if (timetableSyncForm) {
-        timetableSyncForm.addEventListener('submit', async function (e) {
-          e.preventDefault();
-          const url = timetableUrlInput ? String(timetableUrlInput.value || '').trim() : '';
-          if (!url) {
-            if (timetableSyncStatus) {
-              timetableSyncStatus.textContent = 'Timetable URL is required.';
-              timetableSyncStatus.style.color = '#c0392b';
-            }
-            return;
-          }
-          const submitBtn = timetableSyncForm.querySelector('button[type="submit"]');
-          if (submitBtn) submitBtn.disabled = true;
-          if (timetableSyncStatus) {
-            timetableSyncStatus.textContent = 'Syncing timetable...';
-            timetableSyncStatus.style.color = '#3a3563';
-          }
-          try {
-            const res = await fetch('/api/student/timetable-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ timetableUrl: url }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data || data.ok !== true) {
-              throw new Error((data && data.message) || 'Timetable sync failed.');
-            }
-            studentSyncedVenue = String(data.venue || '').trim();
-            renderStudentProfile();
-            if (timetableSyncStatus) {
-              timetableSyncStatus.textContent = `Synced. Detected venue: ${studentSyncedVenue}`;
-              timetableSyncStatus.style.color = '#1b5e20';
-            }
-            setTimeout(closeTimetableSyncModal, 900);
-          } catch (err) {
-            if (timetableSyncStatus) {
-              timetableSyncStatus.textContent = err && err.message ? err.message : 'Unable to sync timetable.';
-              timetableSyncStatus.style.color = '#c0392b';
-            }
           } finally {
             if (submitBtn) submitBtn.disabled = false;
           }

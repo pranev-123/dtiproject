@@ -88,8 +88,8 @@
       },
       {
         id: 'studentConnectionSection',
-        title: 'Timetable & venue awareness',
-        text: 'Connection panel ties faculty presence to timetable-synced venue hints for the right class context.',
+        title: 'Connection status',
+        text: 'See whether the faculty dashboard is linked and active for your current session.',
       },
     ],
     faculty: [
