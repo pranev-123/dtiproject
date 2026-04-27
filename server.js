@@ -42,8 +42,9 @@ function hashToken(token) {
 }
 
 // ---- Module 2: Smart login security constants ----
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_FAILED_ATTEMPTS = Math.max(1, Number(process.env.MAX_FAILED_ATTEMPTS || 5));
+const LOCKOUT_DURATION_MINUTES = Math.max(1, Number(process.env.LOCKOUT_DURATION_MINUTES || 10));
+const LOCKOUT_DURATION_MS = LOCKOUT_DURATION_MINUTES * 60 * 1000;
 const LOGIN_OTP_EXPIRY_MS = 3 * 60 * 1000; // 3 minutes
 const LOGIN_OTP_MAX_ATTEMPTS = 5;
 const LOGIN_OTP_RESEND_COOLDOWN_MS = 10 * 1000; // 10 seconds between OTP emails
