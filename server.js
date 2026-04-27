@@ -248,6 +248,7 @@ function clientIpFromReq(req) {
 // survive server restarts (prevents duplicate registration after restart).
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const DB_BACKUP_DIR = path.join(DATA_DIR, 'db-backups');
 const MONGO_URI = String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim();
 const MONGO_DB_NAME = String(process.env.MONGODB_DB || 'dti').trim();
 const REDIS_URL = String(process.env.REDIS_URL || '').trim();
@@ -409,6 +410,73 @@ const sessionRecordingUpload = multer({
   },
 });
 
+function hasAnyRegisteredAccounts(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  const userCount = payload.users && typeof payload.users === 'object' ? Object.keys(payload.users).length : 0;
+  const studentCount =
+    payload.studentRegistrations && typeof payload.studentRegistrations === 'object'
+      ? Object.keys(payload.studentRegistrations).length
+      : 0;
+  return userCount > 0 || studentCount > 0;
+}
+
+function applyPersistedPayload(parsed) {
+  if (!parsed || typeof parsed !== 'object') return;
+  if (parsed.users && typeof parsed.users === 'object') {
+    Object.assign(users, parsed.users);
+  }
+  if (parsed.studentRegistrations && typeof parsed.studentRegistrations === 'object') {
+    Object.assign(studentRegistrations, parsed.studentRegistrations);
+  }
+  if (parsed.attendanceRecords && typeof parsed.attendanceRecords === 'object') {
+    Object.assign(attendanceRecords, parsed.attendanceRecords);
+  }
+  if (Array.isArray(parsed.supportRequests)) {
+    supportRequests.splice(0, supportRequests.length, ...parsed.supportRequests);
+  }
+  if (Array.isArray(parsed.campusFeedPosts)) {
+    campusFeedPosts.splice(0, campusFeedPosts.length, ...parsed.campusFeedPosts);
+  }
+  if (Array.isArray(parsed.automationAuditLogs)) {
+    automationAuditLogs.splice(0, automationAuditLogs.length, ...parsed.automationAuditLogs);
+  }
+  if (Array.isArray(parsed.firewallNetworkLogs)) {
+    firewallNetworkLogs.splice(0, firewallNetworkLogs.length, ...parsed.firewallNetworkLogs);
+  }
+  if (Array.isArray(parsed.sessionRecordingsList)) {
+    sessionRecordingsList.splice(0, sessionRecordingsList.length, ...parsed.sessionRecordingsList);
+  }
+}
+
+function restoreDatabaseFromLatestBackup() {
+  try {
+    if (!fs.existsSync(DB_BACKUP_DIR)) return false;
+    const backupFiles = fs
+      .readdirSync(DB_BACKUP_DIR, { withFileTypes: true })
+      .filter((d) => d && d.isFile() && d.name.endsWith('.json'))
+      .map((d) => d.name)
+      .sort((a, b) => b.localeCompare(a));
+    for (const name of backupFiles) {
+      const abs = path.join(DB_BACKUP_DIR, name);
+      const raw = fs.readFileSync(abs, 'utf8');
+      if (!raw || !raw.trim()) continue;
+      const parsed = JSON.parse(raw);
+      if (!hasAnyRegisteredAccounts(parsed)) continue;
+      applyPersistedPayload(parsed);
+      try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(parsed, null, 2), 'utf8');
+      } catch (_) {
+        // Best effort: in-memory restoration already happened.
+      }
+      console.warn(`Recovered registrations from backup: ${name}`);
+      return true;
+    }
+  } catch (err) {
+    console.error('Failed while attempting DB backup restore:', err);
+  }
+  return false;
+}
+
 function loadDatabase() {
   try {
     if (!fs.existsSync(DB_FILE)) return;
@@ -416,29 +484,13 @@ function loadDatabase() {
     if (!raw || !raw.trim()) return;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      if (parsed.users && typeof parsed.users === 'object') {
-        Object.assign(users, parsed.users);
-      }
-      if (parsed.studentRegistrations && typeof parsed.studentRegistrations === 'object') {
-        Object.assign(studentRegistrations, parsed.studentRegistrations);
-      }
-      if (parsed.attendanceRecords && typeof parsed.attendanceRecords === 'object') {
-        Object.assign(attendanceRecords, parsed.attendanceRecords);
-      }
-      if (Array.isArray(parsed.supportRequests)) {
-        supportRequests.splice(0, supportRequests.length, ...parsed.supportRequests);
-      }
-      if (Array.isArray(parsed.campusFeedPosts)) {
-        campusFeedPosts.splice(0, campusFeedPosts.length, ...parsed.campusFeedPosts);
-      }
-      if (Array.isArray(parsed.automationAuditLogs)) {
-        automationAuditLogs.splice(0, automationAuditLogs.length, ...parsed.automationAuditLogs);
-      }
-      if (Array.isArray(parsed.firewallNetworkLogs)) {
-        firewallNetworkLogs.splice(0, firewallNetworkLogs.length, ...parsed.firewallNetworkLogs);
-      }
-      if (Array.isArray(parsed.sessionRecordingsList)) {
-        sessionRecordingsList.splice(0, sessionRecordingsList.length, ...parsed.sessionRecordingsList);
+      if (hasAnyRegisteredAccounts(parsed)) {
+        applyPersistedPayload(parsed);
+      } else {
+        const restored = restoreDatabaseFromLatestBackup();
+        if (!restored) {
+          console.warn('db.json loaded but contains zero registered accounts (users/students).');
+        }
       }
     }
     console.log('Loaded users, student registrations and attendance from db.json');
@@ -462,7 +514,42 @@ function saveDatabase() {
       firewallNetworkLogs,
       sessionRecordingsList,
     };
+    const incomingHasAccounts = hasAnyRegisteredAccounts(payload);
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const existingRaw = fs.readFileSync(DB_FILE, 'utf8');
+        const existingParsed = existingRaw && existingRaw.trim() ? JSON.parse(existingRaw) : null;
+        const existingHasAccounts = hasAnyRegisteredAccounts(existingParsed);
+        if (existingHasAccounts && !incomingHasAccounts) {
+          console.error('Blocked db.json overwrite because it would erase all registered accounts.');
+          return;
+        }
+      } catch (_) {
+        // If current db.json cannot be parsed, continue and rewrite with current payload.
+      }
+    }
     fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf8');
+    if (incomingHasAccounts) {
+      try {
+        if (!fs.existsSync(DB_BACKUP_DIR)) {
+          fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
+        }
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupFile = path.join(DB_BACKUP_DIR, `db-${stamp}.json`);
+        fs.writeFileSync(backupFile, JSON.stringify(payload, null, 2), 'utf8');
+        const backups = fs
+          .readdirSync(DB_BACKUP_DIR, { withFileTypes: true })
+          .filter((d) => d && d.isFile() && d.name.endsWith('.json'))
+          .map((d) => d.name)
+          .sort((a, b) => b.localeCompare(a));
+        const keep = 20;
+        backups.slice(keep).forEach((name) => {
+          try { fs.unlinkSync(path.join(DB_BACKUP_DIR, name)); } catch (_) {}
+        });
+      } catch (backupErr) {
+        console.warn('Could not write DB backup snapshot:', backupErr && backupErr.message ? backupErr.message : backupErr);
+      }
+    }
     persistAppStateToMongo(payload);
   } catch (err) {
     console.error('Failed to save database file db.json:', err);
