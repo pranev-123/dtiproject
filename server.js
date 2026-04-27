@@ -6139,6 +6139,58 @@ app.post('/api/change-password', ensureAuthenticated, async (req, res) => {
 
 let sessionCounter = 1;
 
+function createSessionRecord(ownerEmail, topic, venue, startTime, endTime, sessionMode, extraFields) {
+  const id = `S${sessionCounter++}`;
+  sessions[id] = {
+    id,
+    ownerEmail: String(ownerEmail || '').trim().toLowerCase(),
+    topic,
+    venue,
+    startTime,
+    endTime,
+    createdAt: new Date().toISOString(),
+    attentionHistory: [], // { t, score }
+    studentAttentionHistory: {}, // registerNumber -> [{ t, score, sourceType }]
+    alerts: [], // { t, message }
+    deviceIds: {}, // deviceId -> lastSeen (ISO) for connected-device count
+    closed: false,
+    paused: false,
+    // Zone-level attention (privacy-safe: no identities, no counts, only aggregate per zone)
+    zoneHistory: {
+      frontBench: [],
+      middleBenches: [],
+      lastBench: [],
+      lastRightCornerBench: [],
+      lastLeftCornerBench: [],
+    },
+    confusionCount: 0, // Anonymous "I'm confused" signals for lecture quality
+    // Module 3: AI attention prediction (last 10 samples, every 5s; 4 consecutive negative → alert; 2 min cooldown)
+    attentionPredictionHistory: [],
+    lastPredictionSampleTime: 0,
+    lastPredictionAt: 0,
+    // Per-session signing key for attention payload integrity (HMAC); never store plain passwords
+    signingKey: security.secureSessionToken(),
+    sessionMode,
+    interventions: [], // { id, type, label, startedAt, baselineAttention, durationMs }
+    activeIntervention: null,
+    classroomActivities: [], // [{id,type,question,options,optionCounts,responsesByRegister,createdAt,sessionId}]
+    behaviorAlerts: [],
+    behaviorAlertCooldownByKey: {},
+    lastAttentionSampleAtByKey: {},
+    ...(extraFields && typeof extraFields === 'object' ? extraFields : {}),
+  };
+
+  // Keep global active session in sync with HTTP start (students poll /api/session-status; Socket may be late).
+  lastActiveSessionId = id;
+  globalSessionActive = true;
+  io.emit('active-session', { sessionId: id });
+  emitSessionScoped('active-session', id, { sessionId: id });
+  // Broadcast session started so student dashboard can disable voice assistant during lecture.
+  emitSessionScoped('session-status', id, { status: 'started', sessionId: id });
+  persistSessionToMongo(sessions[id]);
+  return id;
+}
+
 app.post('/api/session/start', ensureAuthenticated, (req, res) => {
   try {
     const body = req && req.body && typeof req.body === 'object' ? req.body : {};
@@ -6154,57 +6206,46 @@ app.post('/api/session/start', ensureAuthenticated, (req, res) => {
         .json({ ok: false, message: 'Topic, venue, start time and end time are required.' });
     }
 
-    const id = `S${sessionCounter++}`;
-    sessions[id] = {
-      id,
-      ownerEmail: req.session.userEmail,
-      topic,
-      venue,
-      startTime,
-      endTime,
-      createdAt: new Date().toISOString(),
-      attentionHistory: [], // { t, score }
-      studentAttentionHistory: {}, // registerNumber -> [{ t, score, sourceType }]
-      alerts: [], // { t, message }
-      deviceIds: {}, // deviceId -> lastSeen (ISO) for connected-device count
-      closed: false,
-      paused: false,
-      // Zone-level attention (privacy-safe: no identities, no counts, only aggregate per zone)
-      zoneHistory: {
-        frontBench: [],
-        middleBenches: [],
-        lastBench: [],
-        lastRightCornerBench: [],
-        lastLeftCornerBench: [],
-      },
-      confusionCount: 0, // Anonymous "I'm confused" signals for lecture quality
-      // Module 3: AI attention prediction (last 10 samples, every 5s; 4 consecutive negative → alert; 2 min cooldown)
-      attentionPredictionHistory: [],
-      lastPredictionSampleTime: 0,
-      lastPredictionAt: 0,
-      // Per-session signing key for attention payload integrity (HMAC); never store plain passwords
-      signingKey: security.secureSessionToken(),
-      sessionMode,
-      interventions: [], // { id, type, label, startedAt, baselineAttention, durationMs }
-      activeIntervention: null,
-      classroomActivities: [], // [{id,type,question,options,optionCounts,responsesByRegister,createdAt,sessionId}]
-      behaviorAlerts: [],
-      behaviorAlertCooldownByKey: {},
-      lastAttentionSampleAtByKey: {},
-    };
-
-    // Keep global active session in sync with HTTP start (students poll /api/session-status; Socket may be late).
-    lastActiveSessionId = id;
-    globalSessionActive = true;
-    io.emit('active-session', { sessionId: id });
-    emitSessionScoped('active-session', id, { sessionId: id });
-    // Broadcast session started so student dashboard can disable voice assistant during lecture.
-    emitSessionScoped('session-status', id, { status: 'started', sessionId: id });
-    persistSessionToMongo(sessions[id]);
+    const id = createSessionRecord(req.session.userEmail, topic, venue, startTime, endTime, sessionMode);
     return res.json({ ok: true, sessionId: id });
   } catch (err) {
     console.error('Session start failed:', err);
     return res.status(500).json({ ok: false, message: 'Unable to start session.' });
+  }
+});
+
+app.post('/api/leadership/emergency-session-start', ensureLeadership, (req, res) => {
+  try {
+    const leaderEmail = String(req.session.userEmail || '').trim().toLowerCase();
+    const leaderRec = users[leaderEmail];
+    if (!leaderRec || !isAssistantHoDDesignation(leaderRec.designation)) {
+      return res.status(403).json({ ok: false, message: 'Only AHoD can start emergency sessions.' });
+    }
+    const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+    const facultyEmail = normalizeFacultyEmailForAuth(body.facultyEmail || '');
+    const topic = String(body.topic || '').trim();
+    const venue = String(body.venue || '').trim();
+    const startTime = String(body.startTime || '').trim();
+    const endTime = String(body.endTime || '').trim();
+    const sessionMode = String(body.sessionMode || 'lecture').trim().toLowerCase();
+    if (!facultyEmail || !isAllowedFacultyEmail(facultyEmail)) {
+      return res.status(400).json({ ok: false, message: 'Enter a valid faculty email.' });
+    }
+    if (!topic || !venue || !startTime || !endTime) {
+      return res.status(400).json({ ok: false, message: 'Topic, venue, start time and end time are required.' });
+    }
+    const facultyRec = users[facultyEmail];
+    if (!facultyRec) {
+      return res.status(404).json({ ok: false, message: 'Faculty account not found.' });
+    }
+    const id = createSessionRecord(facultyEmail, topic, venue, startTime, endTime, sessionMode, {
+      emergencyStartedBy: leaderEmail,
+      emergencyStartedAt: new Date().toISOString(),
+    });
+    return res.json({ ok: true, sessionId: id, message: 'Emergency session started for faculty.' });
+  } catch (err) {
+    console.error('Leadership emergency session start failed:', err);
+    return res.status(500).json({ ok: false, message: 'Unable to start emergency session.' });
   }
 });
 

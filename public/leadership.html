@@ -967,6 +967,30 @@
           </div>
         </section>
 
+        <section class="leader-card" id="leaderEmergencyStartSection" data-innovation="emergency-start" style="display:none;">
+          <div class="leader-card-title">Emergency Session Start (AHoD only)</div>
+          <p class="leader-note" style="margin-bottom:10px;">
+            Use this only if faculty forgot their laptop/mobile. The session will be started under that faculty account.
+          </p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+            <input id="emergencyFacultyEmail" type="email" placeholder="faculty@rajalakshmi.edu.in" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+            <input id="emergencyTopic" type="text" placeholder="Topic" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+            <input id="emergencyVenue" type="text" placeholder="Venue" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+            <input id="emergencyStartTime" type="text" placeholder="Start time" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+            <input id="emergencyEndTime" type="text" placeholder="End time" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+            <select id="emergencySessionMode" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;background:#fff;">
+              <option value="lecture">Lecture</option>
+              <option value="lab">Lab</option>
+              <option value="seminar">Seminar</option>
+              <option value="tutorial">Tutorial</option>
+            </select>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button type="button" id="btnEmergencyStartSession" class="primary">Start emergency session</button>
+            <span id="emergencyStartStatus" style="font-size:12px;color:#6b7280;min-height:16px;"></span>
+          </div>
+        </section>
+
         <section class="leader-card" id="leaderSessionsSection" data-innovation="sessions">
           <div class="leader-card-title">Recent sessions</div>
           <div class="leader-table-wrap">
@@ -1240,7 +1264,7 @@
       const leaderLogoutBtn = document.getElementById('leaderLogoutBtn');
       const leaderProfileCircleInner = document.querySelector('.leader-profile-circle-inner');
       const leaderProfileHeadline = document.getElementById('leaderProfileHeadline');
-      let leaderProfileState = { headline: '', profileImageUrl: '', name: '' };
+      let leaderProfileState = { headline: '', profileImageUrl: '', name: '', designation: '' };
 
       function applyLeaderAvatar(imageUrl, fallbackText) {
         if (!leaderProfileCircleInner) return;
@@ -1275,9 +1299,58 @@
             headline: String(data.headline || '').trim(),
             profileImageUrl: String(data.profileImageUrl || '').trim(),
             name: String(data.name || '').trim(),
+            designation: String(data.designation || '').trim(),
           };
           renderLeaderProfile();
+          const emergencySection = document.getElementById('leaderEmergencyStartSection');
+          if (emergencySection) {
+            const d = String(leaderProfileState.designation || '').trim().toLowerCase();
+            const isAhod = d === 'ahod' || d === 'assistant hod' || d === 'assistant head of department';
+            emergencySection.style.display = isAhod ? 'block' : 'none';
+          }
         } catch (_) {}
+      }
+
+      async function submitEmergencySessionStart() {
+        const facultyEmailEl = document.getElementById('emergencyFacultyEmail');
+        const topicEl = document.getElementById('emergencyTopic');
+        const venueEl = document.getElementById('emergencyVenue');
+        const startEl = document.getElementById('emergencyStartTime');
+        const endEl = document.getElementById('emergencyEndTime');
+        const modeEl = document.getElementById('emergencySessionMode');
+        const statusEl = document.getElementById('emergencyStartStatus');
+        const btnEl = document.getElementById('btnEmergencyStartSession');
+        if (!facultyEmailEl || !topicEl || !venueEl || !startEl || !endEl || !modeEl || !statusEl || !btnEl) return;
+        const payload = {
+          facultyEmail: String(facultyEmailEl.value || '').trim().toLowerCase(),
+          topic: String(topicEl.value || '').trim(),
+          venue: String(venueEl.value || '').trim(),
+          startTime: String(startEl.value || '').trim(),
+          endTime: String(endEl.value || '').trim(),
+          sessionMode: String(modeEl.value || 'lecture').trim().toLowerCase(),
+        };
+        btnEl.disabled = true;
+        statusEl.style.color = '#6b7280';
+        statusEl.textContent = 'Starting emergency session...';
+        try {
+          const res = await fetch('/api/leadership/emergency-session-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok !== true) {
+            throw new Error((data && data.message) || 'Unable to start emergency session.');
+          }
+          statusEl.style.color = '#166534';
+          statusEl.textContent = (data.message || 'Emergency session started.') + (data.sessionId ? ` (ID: ${data.sessionId})` : '');
+        } catch (err) {
+          statusEl.style.color = '#b91c1c';
+          statusEl.textContent = err && err.message ? err.message : 'Unable to start emergency session.';
+        } finally {
+          btnEl.disabled = false;
+        }
       }
 
       async function preprocessProfileImage(file) {
@@ -1747,6 +1820,10 @@
           closeLeaderProfileDropdown();
           window.location.href = '/firewall-room';
         });
+      }
+      const btnEmergencyStartSession = document.getElementById('btnEmergencyStartSession');
+      if (btnEmergencyStartSession) {
+        btnEmergencyStartSession.addEventListener('click', submitEmergencySessionStart);
       }
       loadLeaderProfile();
 
