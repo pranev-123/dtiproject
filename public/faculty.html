@@ -3511,12 +3511,15 @@
 
       async function ensureActiveSessionId() {
         if (currentSessionId) return currentSessionId;
+        // Use faculty-owned active sessions first to avoid picking a global session
+        // that may belong to a different faculty account.
         try {
-          const res = await fetch('/api/session-status', { credentials: 'include' });
-          const data = await res.json().catch(() => ({}));
-          if (res.ok && data && data.ok && data.active && data.sessionId) {
-            currentSessionId = String(data.sessionId);
-            return currentSessionId;
+          await loadActiveSessions();
+          if (currentSessionId) return currentSessionId;
+          const cached = Array.isArray(window.__activeSessionsCache) ? window.__activeSessionsCache : [];
+          if (cached.length) {
+            currentSessionId = String(cached[0].id || '');
+            if (currentSessionId) return currentSessionId;
           }
         } catch (_) {}
         return null;
