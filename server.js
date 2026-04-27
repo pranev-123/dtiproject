@@ -57,6 +57,16 @@ const NUMERIC_EMAIL_LOCALPART_REGEX = /^\d+$/;
 // Keep AI automation disabled by default until explicitly enabled from dashboard/settings.
 const AUTO_ENABLE_AI_AGENT_ON_SIGNIN = String(process.env.AUTO_ENABLE_AI_AGENT_ON_SIGNIN || 'false').trim().toLowerCase() === 'true';
 
+function clearExpiredAccountLockout(rec, nowMs) {
+  if (!rec || typeof rec !== 'object') return;
+  const now = Number(nowMs || Date.now());
+  const until = Number(rec.accountLockedUntil || 0);
+  if (until && now >= until) {
+    rec.accountLockedUntil = null;
+    rec.failedAttempts = 0;
+  }
+}
+
 function normalizeFacultyEmailForAuth(emailRaw) {
   const email = String(emailRaw || '').trim().toLowerCase();
   if (!email) return '';
@@ -3873,6 +3883,7 @@ app.post('/api/student-login', async (req, res) => {
 
   // Module 2: Lockout check
   const now = Date.now();
+  clearExpiredAccountLockout(registered, now);
   if (registered.accountLockedUntil && now < registered.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
@@ -5818,6 +5829,7 @@ app.post('/api/login', async (req, res) => {
 
   // Module 2: Lockout check
   const now = Date.now();
+  clearExpiredAccountLockout(existing, now);
   if (existing.accountLockedUntil && now < existing.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
@@ -5889,6 +5901,7 @@ app.post('/api/login/google', async (req, res) => {
     return res.status(403).json({ ok: false, message: 'Please verify your email using the link sent to you before signing in.' });
   }
   const now = Date.now();
+  clearExpiredAccountLockout(existing, now);
   if (existing.accountLockedUntil && now < existing.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
