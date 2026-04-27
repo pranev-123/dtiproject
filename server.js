@@ -2978,7 +2978,12 @@ function resolveStudentRecordFromSession(req) {
   if (!req.session || !req.session.studentEmail) return null;
   const email = String(req.session.studentEmail).trim().toLowerCase();
   const sessionReg = String(req.session.studentId || '').trim();
-  const rec = studentRegistrations[email] || (sessionReg ? studentRegistrations[sessionReg + STUDENT_EMAIL_SUFFIX] : null) || null;
+  // Same lookup rules as login: record key may be register@domain while session holds official email.
+  let rec =
+    studentRegistrations[email] ||
+    (sessionReg ? studentRegistrations[sessionReg + STUDENT_EMAIL_SUFFIX] : null) ||
+    findStudentRegistrationByLoginEmail(email) ||
+    null;
   if (!rec || typeof rec !== 'object') return null;
   const reg = sessionReg || String(rec.registerNumber || '').trim();
   if (!sessionReg && reg) req.session.studentId = reg;
@@ -4118,7 +4123,9 @@ app.post('/api/student-login/verify-otp', async (req, res) => {
   const studentEmail = String(data.sessionData.studentEmail || '').trim().toLowerCase();
   const studentId = String(data.sessionData.studentId || '').trim();
   const studentRec =
-    studentRegistrations[studentEmail] || studentRegistrations[studentId + STUDENT_EMAIL_SUFFIX] || null;
+    findStudentRegistrationByLoginEmail(studentEmail) ||
+    (studentId ? studentRegistrations[studentId + STUDENT_EMAIL_SUFFIX] : null) ||
+    null;
   if (studentRec && studentRec.hashedPassword && !studentRec.emailVerified) {
     return res.status(403).json({
       ok: false,

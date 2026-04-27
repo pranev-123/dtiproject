@@ -395,6 +395,7 @@
           const otpRes = await fetch(verifyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ challengeId: activeOtpChallengeId, otp: otp }),
           });
           const otpData = await otpRes.json();
@@ -429,6 +430,7 @@
             const res = await fetch('/api/student-login/resend-otp', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({ challengeId: activeOtpChallengeId }),
             });
             const data = await res.json().catch(() => ({}));
@@ -480,6 +482,7 @@
           const res = await fetch('/api/student-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ email, password }),
           });
           const data = await res.json();
