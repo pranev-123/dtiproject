@@ -247,6 +247,7 @@ const OD_DIR = path.join(DATA_DIR, 'od-proofs');
 const OD_VERIFICATION_DIR = path.join(DATA_DIR, 'od-verification-proofs');
 const PROFILE_DIR = path.join(DATA_DIR, 'profile-images');
 const STUDENT_DOCS_DIR = path.join(DATA_DIR, 'student-documents');
+const FACULTY_NOTES_DIR = path.join(DATA_DIR, 'faculty-notes');
 const FEED_MEDIA_DIR = path.join(DATA_DIR, 'feed-media');
 const SLEEP_ALERT_DIR = path.join(DATA_DIR, 'sleep-alerts');
 try {
@@ -258,6 +259,9 @@ try {
   }
   if (!fs.existsSync(STUDENT_DOCS_DIR)) {
     fs.mkdirSync(STUDENT_DOCS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(FACULTY_NOTES_DIR)) {
+    fs.mkdirSync(FACULTY_NOTES_DIR, { recursive: true });
   }
   if (!fs.existsSync(FEED_MEDIA_DIR)) {
     fs.mkdirSync(FEED_MEDIA_DIR, { recursive: true });
@@ -318,6 +322,39 @@ const studentDocsUpload = multer({
     const mime = String(file.mimetype || '').toLowerCase();
     if (STUDENT_DOC_ALLOWED_MIMES.has(mime)) return cb(null, true);
     return cb(new Error('Unsupported file type. Use PDF/DOC/DOCX/TXT/JPG/PNG/XLS/XLSX.'));
+  },
+});
+
+const FACULTY_NOTE_ALLOWED_MIMES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+]);
+const FACULTY_NOTE_ALLOWED_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.jpeg', '.jpg', '.png',
+]);
+const facultyNotesStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, FACULTY_NOTES_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    const safeExt = ext && ext.length <= 10 ? ext : '.bin';
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${safeExt}`);
+  },
+});
+const facultyNotesUpload = multer({
+  storage: facultyNotesStorage,
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12 MB each
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || '').toLowerCase();
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    if (FACULTY_NOTE_ALLOWED_MIMES.has(mime) || FACULTY_NOTE_ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error('Unsupported file type. Use PDF/DOC/DOCX/PPT/PPTX/JPEG/JPG/PNG.'));
   },
 });
 
@@ -2830,6 +2867,22 @@ function sanitizeStudentDocMeta(meta) {
   };
 }
 
+function sanitizeFacultyNoteMeta(meta) {
+  if (!meta || typeof meta !== 'object') return null;
+  return {
+    noteId: meta.noteId ? String(meta.noteId) : '',
+    subject: meta.subject ? String(meta.subject) : '',
+    topic: meta.topic ? String(meta.topic) : '',
+    description: meta.description ? String(meta.description) : '',
+    originalName: meta.originalName ? String(meta.originalName) : '',
+    mimeType: meta.mimeType ? String(meta.mimeType) : '',
+    size: Number(meta.size || 0),
+    uploadedAt: meta.uploadedAt ? String(meta.uploadedAt) : '',
+    sha256: meta.sha256 ? String(meta.sha256) : '',
+    uploaderName: meta.uploaderName ? String(meta.uploaderName) : '',
+  };
+}
+
 // Restrict Admin accounts to Admin-only area and APIs.
 app.use((req, res, next) => {
   if (!isAdminSession(req)) return next();
@@ -4057,6 +4110,156 @@ app.get('/api/student/documents/download', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   return res.download(doc.path, doc.originalName || 'document');
+});
+
+app.post('/api/faculty/notes', ensureAuthenticated, (req, res) => {
+  const runUpload = facultyNotesUpload.single('noteFile');
+  return runUpload(req, res, (err) => {
+    if (err) {
+      const msg = err && err.message ? err.message : 'Upload failed.';
+      return res.status(400).json({ ok: false, message: msg });
+    }
+    const userEmail = String(req.session.userEmail || '').trim().toLowerCase();
+    const rec = users[userEmail];
+    if (!rec || typeof rec !== 'object') {
+      return res.status(404).json({ ok: false, message: 'Faculty profile not found.' });
+    }
+    const file = req.file || null;
+    if (!file) return res.status(400).json({ ok: false, message: 'Please choose a note file.' });
+    const subject = String((req.body && req.body.subject) || '').trim().slice(0, 100);
+    const topic = String((req.body && req.body.topic) || '').trim().slice(0, 140);
+    const description = String((req.body && req.body.description) || '').trim().slice(0, 500);
+    if (!subject) return res.status(400).json({ ok: false, message: 'Subject is required.' });
+    if (!topic) return res.status(400).json({ ok: false, message: 'Topic is required.' });
+
+    const absPath = String(file.path || '');
+    let sha256 = '';
+    try {
+      const buf = fs.readFileSync(absPath);
+      sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+    } catch (_) {}
+
+    if (!Array.isArray(rec.uploadedNotes)) rec.uploadedNotes = [];
+    const note = {
+      noteId: crypto.randomBytes(10).toString('hex'),
+      subject,
+      topic,
+      description,
+      originalName: String(file.originalname || 'resource'),
+      mimeType: String(file.mimetype || ''),
+      size: Number(file.size || 0),
+      uploadedAt: new Date().toISOString(),
+      sha256,
+      uploaderEmail: userEmail,
+      uploaderName: rec.name ? String(rec.name) : '',
+      path: absPath,
+    };
+    rec.uploadedNotes.push(note);
+    if (rec.uploadedNotes.length > 500) {
+      const removed = rec.uploadedNotes.splice(0, rec.uploadedNotes.length - 500);
+      for (const old of removed) {
+        try { if (old && old.path && fs.existsSync(old.path)) fs.unlinkSync(old.path); } catch (_) { /* best effort */ }
+      }
+    }
+    saveDatabase();
+    return res.json({ ok: true, message: 'Notes uploaded successfully.', note: sanitizeFacultyNoteMeta(note) });
+  });
+});
+
+app.get('/api/faculty/notes', ensureAuthenticated, (req, res) => {
+  const userEmail = String(req.session.userEmail || '').trim().toLowerCase();
+  const rec = users[userEmail];
+  if (!rec || typeof rec !== 'object') {
+    return res.status(404).json({ ok: false, message: 'Faculty profile not found.' });
+  }
+  const notes = Array.isArray(rec.uploadedNotes) ? rec.uploadedNotes : [];
+  const safeNotes = notes
+    .filter((n) => n && n.path && fs.existsSync(n.path))
+    .map((n) => sanitizeFacultyNoteMeta(n));
+  return res.json({ ok: true, notes: safeNotes });
+});
+
+app.patch('/api/faculty/notes/:noteId', ensureAuthenticated, express.json({ limit: '8kb' }), (req, res) => {
+  const userEmail = String(req.session.userEmail || '').trim().toLowerCase();
+  const rec = users[userEmail];
+  if (!rec || typeof rec !== 'object') {
+    return res.status(404).json({ ok: false, message: 'Faculty profile not found.' });
+  }
+  const noteId = String((req.params && req.params.noteId) || '').trim();
+  if (!noteId) return res.status(400).json({ ok: false, message: 'noteId is required.' });
+  const notes = Array.isArray(rec.uploadedNotes) ? rec.uploadedNotes : [];
+  const note = notes.find((n) => n && String(n.noteId || '') === noteId);
+  if (!note) return res.status(404).json({ ok: false, message: 'Notes entry not found.' });
+  if (!note.path || !fs.existsSync(note.path)) {
+    return res.status(404).json({ ok: false, message: 'Notes file not found.' });
+  }
+
+  const subject = String((req.body && req.body.subject) || '').trim().slice(0, 100);
+  const topic = String((req.body && req.body.topic) || '').trim().slice(0, 140);
+  const description = String((req.body && req.body.description) || '').trim().slice(0, 500);
+  if (!subject) return res.status(400).json({ ok: false, message: 'Subject is required.' });
+  if (!topic) return res.status(400).json({ ok: false, message: 'Topic is required.' });
+
+  note.subject = subject;
+  note.topic = topic;
+  note.description = description;
+  note.updatedAt = new Date().toISOString();
+  saveDatabase();
+  return res.json({ ok: true, message: 'Notes updated successfully.', note: sanitizeFacultyNoteMeta(note) });
+});
+
+app.get('/api/student/notes', (req, res) => {
+  const student = resolveStudentRecordFromSession(req);
+  if (!student) return res.status(401).json({ ok: false, message: 'Please sign in as a student.' });
+  const notes = [];
+  for (const email of Object.keys(users)) {
+    const rec = users[email];
+    if (!rec || typeof rec !== 'object') continue;
+    const rows = Array.isArray(rec.uploadedNotes) ? rec.uploadedNotes : [];
+    for (const note of rows) {
+      if (!note || !note.path || !fs.existsSync(note.path)) continue;
+      notes.push(sanitizeFacultyNoteMeta(note));
+    }
+  }
+  notes.sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')));
+  return res.json({ ok: true, notes });
+});
+
+app.get('/api/notes/download', (req, res) => {
+  const noteId = String(req.query.noteId || '').trim();
+  if (!noteId) return res.status(400).json({ ok: false, message: 'noteId is required.' });
+
+  let actorRole = '';
+  let actorEmail = '';
+  if (req.session && req.session.userEmail) {
+    actorRole = 'faculty';
+    actorEmail = String(req.session.userEmail).trim().toLowerCase();
+  } else {
+    const student = resolveStudentRecordFromSession(req);
+    if (!student) return res.status(401).json({ ok: false, message: 'Please sign in.' });
+    actorRole = 'student';
+  }
+
+  let found = null;
+  for (const email of Object.keys(users)) {
+    const rec = users[email];
+    if (!rec || typeof rec !== 'object') continue;
+    const rows = Array.isArray(rec.uploadedNotes) ? rec.uploadedNotes : [];
+    const hit = rows.find((n) => n && String(n.noteId || '') === noteId);
+    if (hit) {
+      found = { rec, note: hit, ownerEmail: email };
+      break;
+    }
+  }
+  if (!found || !found.note || !found.note.path || !fs.existsSync(found.note.path)) {
+    return res.status(404).json({ ok: false, message: 'Notes file not found.' });
+  }
+  if (actorRole === 'faculty' && actorEmail && actorEmail !== String(found.ownerEmail || '').toLowerCase()) {
+    return res.status(403).json({ ok: false, message: 'You can download only your own uploaded notes.' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  return res.download(found.note.path, found.note.originalName || 'notes-resource');
 });
 
 app.get('/api/profile/me', (req, res) => {

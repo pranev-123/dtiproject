@@ -1074,6 +1074,7 @@
             <button type="button" class="student-profile-menu-item" id="studentProfileEditBtn">Edit profile</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileChangePasswordBtn">Change password</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileResumeDocsBtn">Resume & documents</button>
+            <button type="button" class="student-profile-menu-item" id="studentProfileViewNotesBtn">Subject topic notes</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileTimetableBtn">Timetable sync</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileFileToolsBtn">File tools</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileSupportBtn">Support / Contact us</button>
@@ -1731,6 +1732,7 @@
       const studentProfileEditBtn = document.getElementById('studentProfileEditBtn');
       const studentProfileChangePasswordBtn = document.getElementById('studentProfileChangePasswordBtn');
       const studentProfileResumeDocsBtn = document.getElementById('studentProfileResumeDocsBtn');
+      const studentProfileViewNotesBtn = document.getElementById('studentProfileViewNotesBtn');
       const studentProfileTimetableBtn = document.getElementById('studentProfileTimetableBtn');
       const studentProfileFileToolsBtn = document.getElementById('studentProfileFileToolsBtn');
       const studentProfileSupportBtn = document.getElementById('studentProfileSupportBtn');
@@ -5120,6 +5122,110 @@
           openChangePasswordModal();
         });
       }
+      async function openStudentNotesModal() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(17,24,39,0.45);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
+        overlay.innerHTML = '<div style="width:min(880px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;padding:16px;border:1px solid rgba(36,19,95,0.15);box-shadow:0 16px 45px rgba(0,0,0,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;color:#24135f;">Faculty uploaded notes</h3><button id="sNotesCloseBtn" type="button" style="padding:8px 14px;border-radius:999px;border:1px solid #d1d5db;background:#fff;cursor:pointer;">Close</button></div><p style="margin:8px 0 10px;font-size:12px;color:#666;">Browse notes/resources uploaded by faculty, grouped by subject and topic.</p><div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="sNotesSearchInput" type="text" maxlength="120" placeholder="Search subject, topic, faculty, file..." style="flex:1 1 280px;padding:9px 11px;border-radius:10px;border:1px solid #ccc;" /><button id="sNotesRefreshBtn" type="button" style="padding:8px 14px;border-radius:999px;border:1px solid #d1d5db;background:#fff;cursor:pointer;">Refresh</button></div><div id="sNotesStatus" style="min-height:16px;margin-top:8px;font-size:12px;color:#374151;"></div><div id="sNotesList" style="display:grid;gap:10px;margin-top:8px;"></div></div>';
+        document.body.appendChild(overlay);
+        const closeBtn = overlay.querySelector('#sNotesCloseBtn');
+        const refreshBtn = overlay.querySelector('#sNotesRefreshBtn');
+        const searchInput = overlay.querySelector('#sNotesSearchInput');
+        const statusEl = overlay.querySelector('#sNotesStatus');
+        const listEl = overlay.querySelector('#sNotesList');
+        const close = () => { try { overlay.remove(); } catch (_) {} };
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+
+        function formatSize(size) {
+          const n = Number(size || 0);
+          if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+          if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+          return `${n} B`;
+        }
+        function esc(v) {
+          return String(v || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function groupNotes(rows, searchTerm) {
+          const q = String(searchTerm || '').trim().toLowerCase();
+          const filtered = (Array.isArray(rows) ? rows : []).filter((row) => {
+            if (!q) return true;
+            const blob = [
+              String(row.subject || ''),
+              String(row.topic || ''),
+              String(row.uploaderName || ''),
+              String(row.originalName || ''),
+              String(row.description || ''),
+            ].join(' ').toLowerCase();
+            return blob.includes(q);
+          });
+          const groups = {};
+          for (const row of filtered) {
+            const subject = String(row.subject || 'General').trim() || 'General';
+            const topic = String(row.topic || 'General').trim() || 'General';
+            const key = `${subject}__${topic}`;
+            if (!groups[key]) groups[key] = { subject, topic, items: [] };
+            groups[key].items.push(row);
+          }
+          return Object.values(groups).sort((a, b) => a.subject.localeCompare(b.subject) || a.topic.localeCompare(b.topic));
+        }
+
+        function renderGroups(rows) {
+          const grouped = groupNotes(rows, searchInput ? searchInput.value : '');
+          if (!grouped.length) {
+            listEl.innerHTML = '<div style="font-size:12px;color:#6b7280;">No notes found for the selected search.</div>';
+            return;
+          }
+          listEl.innerHTML = grouped.map((grp) => {
+            const filesHtml = grp.items.map((row) => {
+              const uploadedAt = row.uploadedAt ? new Date(row.uploadedAt).toLocaleString() : '-';
+              return '<div style="padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;">'
+                + '<div style="font-size:13px;color:#111827;font-weight:700;">' + esc(row.originalName || 'resource') + '</div>'
+                + (row.description ? '<div style="margin-top:4px;font-size:12px;color:#4b5563;">' + esc(row.description) + '</div>' : '')
+                + '<div style="margin-top:5px;font-size:11px;color:#6b7280;">Uploaded by ' + esc(row.uploaderName || 'Faculty') + ' • ' + uploadedAt + ' • ' + formatSize(row.size) + '</div>'
+                + '<div style="margin-top:6px;"><button type="button" onclick="window.location.href=\'/api/notes/download?noteId=' + encodeURIComponent(String(row.noteId || '')) + '\'" style="padding:8px 14px;border-radius:999px;border:none;background:linear-gradient(135deg,#5c2eb8,#7c3aed);box-shadow:0 6px 16px rgba(92,46,184,0.35);color:#fff;font-size:12px;font-weight:800;cursor:pointer;">&#8681; Download Notes</button></div>'
+                + '</div>';
+            }).join('');
+            return '<div style="border:1px solid #dbe3ff;border-radius:12px;padding:10px;background:#f8faff;">'
+              + '<div style="font-size:14px;color:#24135f;font-weight:800;">' + esc(grp.subject) + '</div>'
+              + '<div style="font-size:12px;color:#4c1d95;margin-top:2px;font-weight:700;">Topic: ' + esc(grp.topic) + '</div>'
+              + '<div style="display:grid;gap:8px;margin-top:8px;">' + filesHtml + '</div>'
+              + '</div>';
+          }).join('');
+        }
+
+        async function loadStudentNotes() {
+          try {
+            if (statusEl) { statusEl.textContent = 'Loading notes...'; statusEl.style.color = '#374151'; }
+            const res = await fetch('/api/student/notes', { credentials: 'include' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Unable to load notes.');
+            const rows = Array.isArray(data.notes) ? data.notes : [];
+            renderGroups(rows);
+            if (statusEl) {
+              statusEl.style.color = '#166534';
+              statusEl.textContent = rows.length ? `${rows.length} resource(s) available.` : 'No notes uploaded yet.';
+            }
+            overlay._notesRows = rows;
+          } catch (err) {
+            if (listEl) listEl.innerHTML = '<div style="font-size:12px;color:#b91c1c;">Unable to load notes.</div>';
+            if (statusEl) { statusEl.style.color = '#b91c1c'; statusEl.textContent = err && err.message ? err.message : 'Unable to load notes.'; }
+          }
+        }
+
+        if (refreshBtn) refreshBtn.addEventListener('click', loadStudentNotes);
+        if (searchInput) {
+          searchInput.addEventListener('input', function () {
+            renderGroups(Array.isArray(overlay._notesRows) ? overlay._notesRows : []);
+          });
+        }
+        await loadStudentNotes();
+      }
       function openResumeDocsModal() {
         if (!resumeDocsModalBackdrop) return;
         resumeDocsModalBackdrop.classList.add('show');
@@ -5143,6 +5249,12 @@
         studentProfileResumeDocsBtn.addEventListener('click', function () {
           closeStudentProfileDropdown();
           openResumeDocsModal();
+        });
+      }
+      if (studentProfileViewNotesBtn) {
+        studentProfileViewNotesBtn.addEventListener('click', function () {
+          closeStudentProfileDropdown();
+          openStudentNotesModal();
         });
       }
       if (studentProfileTimetableBtn) {

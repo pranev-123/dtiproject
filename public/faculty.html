@@ -1462,6 +1462,9 @@
               <button type="button" class="profile-menu-item" id="profileFileToolsBtn">
                 File tools
               </button>
+              <button type="button" class="profile-menu-item" id="profileUploadNotesBtn">
+                Upload notes
+              </button>
               <button type="button" class="profile-menu-item" id="profileSupportBtn">
                 Support / Contact us
               </button>
@@ -2432,6 +2435,7 @@
       const profileDropdownMenu = document.getElementById('profileDropdownMenu');
       const profileEditBtn = document.getElementById('profileEditBtn');
       const profileFileToolsBtn = document.getElementById('profileFileToolsBtn');
+      const profileUploadNotesBtn = document.getElementById('profileUploadNotesBtn');
       const profileSupportBtn = document.getElementById('profileSupportBtn');
       const profileInboxBtn = document.getElementById('profileInboxBtn');
       const profileDeviceSessionsBtn = document.getElementById('profileDeviceSessionsBtn');
@@ -2598,6 +2602,148 @@
             }
           });
         }
+      }
+
+      async function openFacultyUploadNotesPopup() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(17,24,39,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+        overlay.innerHTML = '<div style="width:min(760px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:14px;padding:16px;border:1px solid rgba(36,19,95,0.15);box-shadow:0 16px 45px rgba(0,0,0,0.25);"><h3 style="margin:0 0 8px;font-size:18px;color:#24135f;">Upload notes / resources</h3><p style="margin:0 0 10px;font-size:12px;color:#666;">Upload class notes by subject and topic. Students can view and download these files from their dashboard.</p><div style="display:grid;gap:8px;"><label style="font-size:12px;color:#555;">Subject<input id="fNotesSubject" type="text" maxlength="100" placeholder="e.g., Data Structures" style="width:100%;margin-top:4px;padding:10px 12px;border-radius:10px;border:1px solid #ccc;" /></label><label style="font-size:12px;color:#555;">Topic<input id="fNotesTopic" type="text" maxlength="140" placeholder="e.g., Trees and traversals" style="width:100%;margin-top:4px;padding:10px 12px;border-radius:10px;border:1px solid #ccc;" /></label><label style="font-size:12px;color:#555;">Description (optional)<textarea id="fNotesDescription" rows="3" maxlength="500" placeholder="Short context for students..." style="width:100%;margin-top:4px;padding:10px 12px;border-radius:10px;border:1px solid #ccc;resize:vertical;"></textarea></label><label style="font-size:12px;color:#555;">Document / resource<input id="fNotesFile" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpeg,.jpg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png" style="display:block;margin-top:6px;" /></label><p style="margin:0;font-size:11px;color:#666;">Allowed: PDF, DOC, DOCX, PPT, PPTX, JPEG, JPG, PNG (max 12 MB).</p></div><div id="fNotesStatus" style="min-height:16px;margin-top:8px;font-size:12px;color:#374151;"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button id="fNotesRefreshBtn" type="button" style="padding:8px 14px;border-radius:999px;border:1px solid #d1d5db;background:#fff;cursor:pointer;">Refresh list</button><button id="fNotesUploadBtn" type="button" style="padding:8px 14px;border-radius:999px;border:none;background:#5c2eb8;color:#fff;cursor:pointer;">Upload</button><button id="fNotesCloseBtn" type="button" style="padding:8px 14px;border-radius:999px;border:1px solid #d1d5db;background:#fff;cursor:pointer;">Close</button></div><div style="margin-top:12px;"><h4 style="margin:0 0 6px;font-size:14px;color:#24135f;">Your uploaded notes</h4><div id="fNotesList" style="display:grid;gap:8px;"></div></div></div>';
+        document.body.appendChild(overlay);
+        const subjectInput = overlay.querySelector('#fNotesSubject');
+        const topicInput = overlay.querySelector('#fNotesTopic');
+        const descriptionInput = overlay.querySelector('#fNotesDescription');
+        const fileInput = overlay.querySelector('#fNotesFile');
+        const statusEl = overlay.querySelector('#fNotesStatus');
+        const listEl = overlay.querySelector('#fNotesList');
+        const uploadBtn = overlay.querySelector('#fNotesUploadBtn');
+        const refreshBtn = overlay.querySelector('#fNotesRefreshBtn');
+        const closeBtn = overlay.querySelector('#fNotesCloseBtn');
+        let notesById = {};
+        const close = () => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+        function formatSize(size) {
+          const n = Number(size || 0);
+          if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+          if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+          return `${n} B`;
+        }
+        function esc(v) {
+          return String(v || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        async function loadMyNotes() {
+          try {
+            if (statusEl) { statusEl.textContent = 'Loading uploaded notes...'; statusEl.style.color = '#374151'; }
+            const res = await fetch('/api/faculty/notes', { credentials: 'include' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Unable to load notes.');
+            const rows = Array.isArray(data.notes) ? data.notes : [];
+            notesById = {};
+            rows.forEach((row) => { if (row && row.noteId) notesById[String(row.noteId)] = row; });
+            if (!rows.length) {
+              listEl.innerHTML = '<div style="font-size:12px;color:#6b7280;">No notes uploaded yet.</div>';
+            } else {
+              listEl.innerHTML = rows.map((row) => {
+                const subject = esc(row.subject || '');
+                const topic = esc(row.topic || '');
+                const originalName = esc(row.originalName || 'resource');
+                const noteId = String(row.noteId || '');
+                const description = esc(row.description || '');
+                const uploadedAt = row.uploadedAt ? new Date(row.uploadedAt).toLocaleString() : '-';
+                return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;">'
+                  + '<div style="font-weight:700;color:#24135f;">' + subject + ' - ' + topic + '</div>'
+                  + (description ? '<div style="margin-top:4px;font-size:12px;color:#4b5563;">' + description + '</div>' : '')
+                  + '<div style="margin-top:6px;font-size:12px;color:#6b7280;">' + originalName + ' (' + formatSize(row.size) + ') • ' + uploadedAt + '</div>'
+                  + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">'
+                  + '<button type="button" class="f-note-edit-btn" data-note-id="' + esc(noteId) + '" style="padding:8px 12px;border-radius:999px;border:1px solid #5c2eb8;background:#fff;color:#5c2eb8;font-size:12px;font-weight:800;cursor:pointer;">Edit</button>'
+                  + '<button type="button" onclick="window.location.href=\'/api/notes/download?noteId=' + encodeURIComponent(noteId) + '\'" style="padding:8px 14px;border-radius:999px;border:none;background:linear-gradient(135deg,#5c2eb8,#7c3aed);box-shadow:0 6px 16px rgba(92,46,184,0.35);color:#fff;font-size:12px;font-weight:800;cursor:pointer;">&#8681; Download Notes</button>'
+                  + '</div>'
+                  + '</div>';
+              }).join('');
+              const editButtons = listEl.querySelectorAll('.f-note-edit-btn');
+              editButtons.forEach((btn) => {
+                btn.addEventListener('click', async function () {
+                  const noteId = String(btn.getAttribute('data-note-id') || '').trim();
+                  const note = notesById[noteId] || null;
+                  if (!note) return;
+                  const nextSubject = window.prompt('Edit subject:', String(note.subject || ''));
+                  if (nextSubject === null) return;
+                  const nextTopic = window.prompt('Edit topic:', String(note.topic || ''));
+                  if (nextTopic === null) return;
+                  const nextDescription = window.prompt('Edit description (optional):', String(note.description || ''));
+                  if (nextDescription === null) return;
+                  if (!String(nextSubject || '').trim()) { if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = '#b91c1c'; } return; }
+                  if (!String(nextTopic || '').trim()) { if (statusEl) { statusEl.textContent = 'Topic is required.'; statusEl.style.color = '#b91c1c'; } return; }
+                  try {
+                    if (statusEl) { statusEl.textContent = 'Saving note changes...'; statusEl.style.color = '#374151'; }
+                    const res2 = await fetch('/api/faculty/notes/' + encodeURIComponent(noteId), {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        subject: String(nextSubject || '').trim(),
+                        topic: String(nextTopic || '').trim(),
+                        description: String(nextDescription || '').trim(),
+                      }),
+                    });
+                    const data2 = await res2.json().catch(() => ({}));
+                    if (!res2.ok || !data2 || data2.ok !== true) throw new Error((data2 && data2.message) || 'Unable to edit notes.');
+                    if (statusEl) { statusEl.textContent = 'Notes updated successfully.'; statusEl.style.color = '#166534'; }
+                    await loadMyNotes();
+                  } catch (err2) {
+                    if (statusEl) { statusEl.textContent = err2 && err2.message ? err2.message : 'Unable to edit notes.'; statusEl.style.color = '#b91c1c'; }
+                  }
+                });
+              });
+            }
+            if (statusEl) { statusEl.textContent = ''; }
+          } catch (err) {
+            if (listEl) listEl.innerHTML = '<div style="font-size:12px;color:#b91c1c;">Unable to load notes.</div>';
+            if (statusEl) { statusEl.textContent = err && err.message ? err.message : 'Unable to load notes.'; statusEl.style.color = '#b91c1c'; }
+          }
+        }
+
+        if (refreshBtn) refreshBtn.addEventListener('click', loadMyNotes);
+        if (uploadBtn) {
+          uploadBtn.addEventListener('click', async () => {
+            const subject = subjectInput ? String(subjectInput.value || '').trim() : '';
+            const topic = topicInput ? String(topicInput.value || '').trim() : '';
+            const description = descriptionInput ? String(descriptionInput.value || '').trim() : '';
+            const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+            if (!subject) { if (statusEl) { statusEl.textContent = 'Enter subject.'; statusEl.style.color = '#b91c1c'; } return; }
+            if (!topic) { if (statusEl) { statusEl.textContent = 'Enter topic.'; statusEl.style.color = '#b91c1c'; } return; }
+            if (!file) { if (statusEl) { statusEl.textContent = 'Choose a file to upload.'; statusEl.style.color = '#b91c1c'; } return; }
+            uploadBtn.disabled = true;
+            if (statusEl) { statusEl.textContent = 'Uploading notes...'; statusEl.style.color = '#374151'; }
+            try {
+              const fd = new FormData();
+              fd.append('subject', subject);
+              fd.append('topic', topic);
+              fd.append('description', description);
+              fd.append('noteFile', file);
+              const res = await fetch('/api/faculty/notes', { method: 'POST', body: fd, credentials: 'include' });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || !data || data.ok !== true) throw new Error((data && data.message) || 'Upload failed.');
+              if (statusEl) { statusEl.textContent = 'Notes uploaded successfully.'; statusEl.style.color = '#166534'; }
+              if (topicInput) topicInput.value = '';
+              if (descriptionInput) descriptionInput.value = '';
+              if (fileInput) fileInput.value = '';
+              await loadMyNotes();
+            } catch (err) {
+              if (statusEl) { statusEl.textContent = err && err.message ? err.message : 'Upload failed.'; statusEl.style.color = '#b91c1c'; }
+            } finally {
+              uploadBtn.disabled = false;
+            }
+          });
+        }
+        await loadMyNotes();
       }
 
       async function openFacultyInboxPopup() {
@@ -2922,6 +3068,12 @@
         profileFileToolsBtn.addEventListener('click', () => {
           closeProfileDropdown();
           window.location.href = '/file-tools.html';
+        });
+      }
+      if (profileUploadNotesBtn) {
+        profileUploadNotesBtn.addEventListener('click', () => {
+          closeProfileDropdown();
+          openFacultyUploadNotesPopup();
         });
       }
       if (profileSupportBtn) {
