@@ -2888,11 +2888,13 @@ function appendFirewallNetworkLog(entry) {
 }
 
 function resolveStudentRecordFromSession(req) {
-  if (!req.session || !req.session.studentEmail || !req.session.studentId) return null;
+  if (!req.session || !req.session.studentEmail) return null;
   const email = String(req.session.studentEmail).trim().toLowerCase();
-  const reg = String(req.session.studentId).trim();
-  const rec = studentRegistrations[email] || studentRegistrations[reg + STUDENT_EMAIL_SUFFIX] || null;
+  const sessionReg = String(req.session.studentId || '').trim();
+  const rec = studentRegistrations[email] || (sessionReg ? studentRegistrations[sessionReg + STUDENT_EMAIL_SUFFIX] : null) || null;
   if (!rec || typeof rec !== 'object') return null;
+  const reg = sessionReg || String(rec.registerNumber || '').trim();
+  if (!sessionReg && reg) req.session.studentId = reg;
   return { email, reg, rec };
 }
 
@@ -4037,7 +4039,8 @@ app.post('/api/student-login/verify-otp', async (req, res) => {
     });
   }
   req.session.studentEmail = studentEmail;
-  req.session.studentId = studentId;
+  const fallbackStudentId = studentRec && studentRec.registerNumber ? String(studentRec.registerNumber).trim() : '';
+  req.session.studentId = studentId || fallbackStudentId;
   req.session.mfaVerified = true;
   req.session.mfaRole = 'student';
   req.session.mfaAt = new Date().toISOString();
@@ -4109,11 +4112,12 @@ app.post('/api/student-logout', (req, res) => {
 
 // Student session info (used to prefill OD form / UI)
 app.get('/api/student/me', (req, res) => {
-  if (!req.session || !req.session.studentEmail || !req.session.studentId) {
+  if (!req.session || !req.session.studentEmail) {
     return res.status(401).json({ ok: false, message: 'Please sign in as a student.' });
   }
   const email = String(req.session.studentEmail).trim().toLowerCase();
-  const reg = resolveAttendanceRegisterNumberFromSession(req) || String(req.session.studentId || '').trim();
+  const resolved = resolveStudentRecordFromSession(req);
+  const reg = resolveAttendanceRegisterNumberFromSession(req) || String((resolved && resolved.reg) || req.session.studentId || '').trim();
   const s = studentRegistrations[email] || studentRegistrations[reg + STUDENT_EMAIL_SUFFIX] || null;
   return res.json({
     ok: true,
