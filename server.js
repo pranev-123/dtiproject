@@ -187,6 +187,8 @@ const campusFeedPosts = [];
 const automationAuditLogs = [];
 // Firewall-style network access logs for dashboard users.
 const firewallNetworkLogs = [];
+// Faculty-uploaded session recordings (persisted in db.json); files live under data/session-recordings/.
+const sessionRecordingsList = [];
 // Demo control:
 // - Smart Attendance (hand-raise) ENABLED
 // - Allow OD proof upload
@@ -250,6 +252,7 @@ const STUDENT_DOCS_DIR = path.join(DATA_DIR, 'student-documents');
 const FACULTY_NOTES_DIR = path.join(DATA_DIR, 'faculty-notes');
 const FEED_MEDIA_DIR = path.join(DATA_DIR, 'feed-media');
 const SLEEP_ALERT_DIR = path.join(DATA_DIR, 'sleep-alerts');
+const SESSION_RECORDINGS_DIR = path.join(DATA_DIR, 'session-recordings');
 try {
   if (!fs.existsSync(OD_VERIFICATION_DIR)) {
     fs.mkdirSync(OD_VERIFICATION_DIR, { recursive: true });
@@ -268,6 +271,9 @@ try {
   }
   if (!fs.existsSync(SLEEP_ALERT_DIR)) {
     fs.mkdirSync(SLEEP_ALERT_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(SESSION_RECORDINGS_DIR)) {
+    fs.mkdirSync(SESSION_RECORDINGS_DIR, { recursive: true });
   }
 } catch (_) {
   // Directory creation is best-effort.
@@ -376,6 +382,22 @@ const feedMediaUpload = multer({
   },
 });
 
+const SESSION_RECORDING_MAX_BYTES = Math.max(
+  50 * 1024 * 1024,
+  Number(process.env.SESSION_RECORDING_MAX_MB || 450) * 1024 * 1024,
+);
+const sessionRecordingUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: SESSION_RECORDING_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || '').toLowerCase();
+    if (mime === 'video/webm' || mime === 'video/mp4' || mime === 'video/quicktime' || mime === 'video/x-matroska') {
+      return cb(null, true);
+    }
+    return cb(new Error('Unsupported video type. Use WebM or MP4.'));
+  },
+});
+
 function loadDatabase() {
   try {
     if (!fs.existsSync(DB_FILE)) return;
@@ -404,6 +426,9 @@ function loadDatabase() {
       if (Array.isArray(parsed.firewallNetworkLogs)) {
         firewallNetworkLogs.splice(0, firewallNetworkLogs.length, ...parsed.firewallNetworkLogs);
       }
+      if (Array.isArray(parsed.sessionRecordingsList)) {
+        sessionRecordingsList.splice(0, sessionRecordingsList.length, ...parsed.sessionRecordingsList);
+      }
     }
     console.log('Loaded users, student registrations and attendance from db.json');
   } catch (err) {
@@ -424,6 +449,7 @@ function saveDatabase() {
       campusFeedPosts,
       automationAuditLogs,
       firewallNetworkLogs,
+      sessionRecordingsList,
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf8');
     persistAppStateToMongo(payload);
@@ -535,6 +561,9 @@ async function hydratePersistentStateFromMongo() {
   if (Array.isArray(doc.firewallNetworkLogs)) {
     firewallNetworkLogs.splice(0, firewallNetworkLogs.length, ...doc.firewallNetworkLogs);
   }
+  if (Array.isArray(doc.sessionRecordingsList)) {
+    sessionRecordingsList.splice(0, sessionRecordingsList.length, ...doc.sessionRecordingsList);
+  }
   console.log('Hydrated persistent app state from MongoDB.');
 }
 
@@ -548,6 +577,7 @@ function persistAppStateToMongo(snapshotPayload) {
     campusFeedPosts,
     automationAuditLogs,
     firewallNetworkLogs,
+    sessionRecordingsList,
   };
   runBackgroundTask('Persist app state in MongoDB', async () => {
     await mongoCollections.appState.updateOne(
@@ -561,6 +591,7 @@ function persistAppStateToMongo(snapshotPayload) {
           campusFeedPosts: Array.isArray(payload.campusFeedPosts) ? payload.campusFeedPosts : [],
           automationAuditLogs: Array.isArray(payload.automationAuditLogs) ? payload.automationAuditLogs : [],
           firewallNetworkLogs: Array.isArray(payload.firewallNetworkLogs) ? payload.firewallNetworkLogs : [],
+          sessionRecordingsList: Array.isArray(payload.sessionRecordingsList) ? payload.sessionRecordingsList : [],
           updatedAt: new Date(),
         },
         $setOnInsert: { createdAt: new Date() },
@@ -2519,6 +2550,70 @@ function isAdminSession(req) {
   const email = String(req.session.userEmail || '').trim().toLowerCase();
   const rec = users[email];
   return !!(rec && isAdminDesignation(rec.designation));
+}
+
+function resolveAuthenticatedFacultyEmail(req) {
+  if (!req.session || !req.session.userEmail) return '';
+  if (!hasTwoStepVerifiedSession(req, 'faculty') && !hasTwoStepVerifiedSession(req, 'leadership')) return '';
+  return String(req.session.userEmail || '').trim().toLowerCase();
+}
+
+function sendSessionRecordingVideoFile(req, res, absPath, downloadBaseName) {
+  try {
+    if (!fs.existsSync(absPath)) {
+      return res.status(404).json({ ok: false, message: 'Recording file not found.' });
+    }
+    const stat = fs.statSync(absPath);
+    const size = stat.size;
+    const range = req.headers.range;
+    const lower = String(absPath || '').toLowerCase();
+    const mime = lower.endsWith('.mp4')
+      ? 'video/mp4'
+      : lower.endsWith('.mkv')
+        ? 'video/x-matroska'
+        : 'video/webm';
+    const safeName = String(downloadBaseName || 'recording').replace(/[^\w.\-]+/g, '_').slice(0, 120);
+    if (range) {
+      const parts = String(range).replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+      if (Number.isNaN(start) || Number.isNaN(end) || start >= size || end < start) {
+        return res.status(416).end();
+      }
+      const chunkSize = end - start + 1;
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': mime,
+        'Content-Disposition': `inline; filename="${safeName}"`,
+      });
+      fs.createReadStream(absPath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': size,
+        'Content-Type': mime,
+        'Accept-Ranges': 'bytes',
+        'Content-Disposition': `inline; filename="${safeName}"`,
+      });
+      fs.createReadStream(absPath).pipe(res);
+    }
+  } catch (e) {
+    return res.status(500).json({ ok: false, message: 'Unable to stream recording.' });
+  }
+}
+
+function studentHasAttendanceForSession(studentReg, sessionId) {
+  const sid = String(sessionId || '').trim();
+  const reg = String(studentReg || '').trim();
+  if (!sid || !reg) return false;
+  return !!(attendanceRecords[`${sid}:${reg}`]);
+}
+
+function studentMayViewSessionRecording(studentReg, rec) {
+  if (!rec || !studentReg) return false;
+  // Requirement: recordings are visible to all registered/signed-in students.
+  return true;
 }
 
 // Student dashboard: require student session; if not logged in as student, show student login (not faculty).
@@ -6167,6 +6262,196 @@ app.post('/api/student/behavior-alert', (req, res) => {
   });
   return res.json({ ok: true, event });
 });
+
+const FACULTY_FATIGUE_ALERT_COOLDOWN_MS = 120000;
+
+app.post('/api/faculty/fatigue-alert', express.json({ limit: '3mb' }), (req, res) => {
+  const facultyEmail = resolveAuthenticatedFacultyEmail(req);
+  if (!facultyEmail) {
+    return res.status(401).json({ ok: false, message: 'Please sign in as faculty.' });
+  }
+  const sessionId = String((req.body && req.body.sessionId) || '').trim();
+  const alertType = String((req.body && req.body.type) || 'faculty_sleep_detected').trim();
+  if (!sessionId) return res.status(400).json({ ok: false, message: 'sessionId is required.' });
+  const s = sessions[sessionId];
+  if (!s || String(s.ownerEmail || '').trim().toLowerCase() !== facultyEmail) {
+    return res.status(403).json({ ok: false, message: 'Session not found or access denied.' });
+  }
+  if (!['faculty_sleep_detected'].includes(alertType)) {
+    return res.status(400).json({ ok: false, message: 'Unsupported fatigue alert type.' });
+  }
+  const now = Date.now();
+  if (!s.facultyFatigueCooldownByKey || typeof s.facultyFatigueCooldownByKey !== 'object') {
+    s.facultyFatigueCooldownByKey = {};
+  }
+  const coolKey = alertType;
+  const lastMs = Number(s.facultyFatigueCooldownByKey[coolKey] || 0);
+  if (now - lastMs < FACULTY_FATIGUE_ALERT_COOLDOWN_MS) {
+    return res.json({ ok: true, skipped: true });
+  }
+  s.facultyFatigueCooldownByKey[coolKey] = now;
+  const atIso = new Date(now).toISOString();
+  const snapshotPath = (() => {
+    const parsedSnapshot = parseSnapshotDataUrl(req.body && req.body.snapshotDataUrl);
+    if (!parsedSnapshot) return null;
+    try {
+      const fname = `faculty-fatigue-${sessionId}-${now}-${crypto.randomBytes(3).toString('hex')}.${parsedSnapshot.ext}`;
+      const pth = path.join(SLEEP_ALERT_DIR, fname);
+      fs.writeFileSync(pth, parsedSnapshot.buf);
+      return pth;
+    } catch (_) {
+      return null;
+    }
+  })();
+  const evt = {
+    type: alertType,
+    label: alertType === 'faculty_sleep_detected' ? 'Possible faculty fatigue (eyes closed)' : 'Faculty fatigue',
+    facultyEmail,
+    at: atIso,
+    sessionId,
+    topic: String(s.topic || ''),
+    venue: String(s.venue || ''),
+    snapshotPath: snapshotPath || null,
+  };
+  if (!Array.isArray(s.facultyFatigueAlerts)) s.facultyFatigueAlerts = [];
+  s.facultyFatigueAlerts.push(evt);
+  if (s.facultyFatigueAlerts.length > 120) s.facultyFatigueAlerts = s.facultyFatigueAlerts.slice(-120);
+  persistSessionToMongo(s);
+  return res.json({ ok: true, event: evt });
+});
+
+app.post('/api/faculty/session-recording', (req, res) => {
+  sessionRecordingUpload.single('recording')(req, res, (uploadErr) => {
+    if (uploadErr) {
+      return res.status(400).json({ ok: false, message: uploadErr.message || 'Upload failed.' });
+    }
+    const facultyEmail = resolveAuthenticatedFacultyEmail(req);
+    if (!facultyEmail) {
+      return res.status(401).json({ ok: false, message: 'Please sign in as faculty.' });
+    }
+    const sessionId = String((req.body && req.body.sessionId) || '').trim();
+    const durationSec = Math.max(0, Number((req.body && req.body.durationSec) || 0) || 0);
+    if (!sessionId) return res.status(400).json({ ok: false, message: 'sessionId is required.' });
+    const buf = req.file && req.file.buffer ? req.file.buffer : null;
+    if (!buf || !buf.length) return res.status(400).json({ ok: false, message: 'Recording file is empty.' });
+    const s = sessions[sessionId];
+    if (!s || String(s.ownerEmail || '').trim().toLowerCase() !== facultyEmail) {
+      return res.status(403).json({ ok: false, message: 'Session not found or access denied.' });
+    }
+    const mime = String((req.file && req.file.mimetype) || '').toLowerCase();
+    let ext = '.webm';
+    if (mime.includes('mp4')) ext = '.mp4';
+    else if (mime.includes('quicktime')) ext = '.mov';
+    else if (mime.includes('matroska')) ext = '.mkv';
+    const recordingId = `rec_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const storageName = `${recordingId}${ext}`;
+    const absPath = path.join(SESSION_RECORDINGS_DIR, storageName);
+    try {
+      fs.writeFileSync(absPath, buf);
+    } catch (e) {
+      return res.status(500).json({ ok: false, message: 'Unable to save recording.' });
+    }
+    const recordedAt = new Date().toISOString();
+    const meta = {
+      id: recordingId,
+      sessionId,
+      topic: String(s.topic || ''),
+      venue: String(s.venue || ''),
+      startTime: String(s.startTime || ''),
+      endTime: String(s.endTime || ''),
+      recordedAt,
+      durationSec,
+      storageName,
+      mime: mime || 'video/webm',
+      facultyEmail,
+    };
+    sessionRecordingsList.push(meta);
+    saveDatabase();
+    runBackgroundTask('Notify students session recording published', async () => {
+      await notifyStudentsSessionRecordingPublishedByEmail(meta);
+    });
+    return res.json({ ok: true, recording: meta });
+  });
+});
+
+app.get('/api/student/session-recordings', (req, res) => {
+  if (!req.session || !req.session.studentId) {
+    return res.status(401).json({ ok: false, message: 'Please sign in as a student.' });
+  }
+  if (!hasTwoStepVerifiedSession(req, 'student')) {
+    return res.status(401).json({ ok: false, message: 'Please complete student sign-in.' });
+  }
+  const reg = String(req.session.studentId || '').trim();
+  const mine = sessionRecordingsList.filter((r) => r && studentMayViewSessionRecording(reg, r));
+  const sorted = mine.slice().sort((a, b) => String(b.recordedAt || '').localeCompare(String(a.recordedAt || '')));
+  return res.json({
+    ok: true,
+    recordings: sorted.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      topic: r.topic || '',
+      venue: r.venue || '',
+      startTime: r.startTime || '',
+      endTime: r.endTime || '',
+      recordedAt: r.recordedAt || '',
+      durationSec: Number(r.durationSec || 0),
+      streamUrl: `/api/student/session-recordings/${encodeURIComponent(r.id)}/stream`,
+    })),
+  });
+});
+
+app.get('/api/student/session-recordings/:recordingId/stream', (req, res) => {
+  if (!req.session || !req.session.studentId) {
+    return res.status(401).json({ ok: false, message: 'Please sign in as a student.' });
+  }
+  if (!hasTwoStepVerifiedSession(req, 'student')) {
+    return res.status(401).json({ ok: false, message: 'Please complete student sign-in.' });
+  }
+  const reg = String(req.session.studentId || '').trim();
+  const recordingId = String(req.params.recordingId || '').trim();
+  const rec = sessionRecordingsList.find((x) => x && String(x.id) === recordingId);
+  if (!rec || !studentMayViewSessionRecording(reg, rec)) {
+    return res.status(403).json({ ok: false, message: 'Recording not available.' });
+  }
+  const absPath = path.join(SESSION_RECORDINGS_DIR, String(rec.storageName || ''));
+  const fname = `${(rec.topic || rec.sessionId || 'session').replace(/\s+/g, '-')}-${recordingId.slice(-8)}`;
+  sendSessionRecordingVideoFile(req, res, absPath, fname);
+});
+
+async function notifyStudentsSessionRecordingPublishedByEmail(recordingMeta) {
+  if (!smtpConfigured || !transporter || !recordingMeta) return;
+  const recipients = [];
+  for (const k of Object.keys(studentRegistrations)) {
+    const rec = studentRegistrations[k];
+    const em = String((rec && rec.email) || '').trim().toLowerCase();
+    if (!em || !em.endsWith(STUDENT_EMAIL_SUFFIX)) continue;
+    if (!recipients.includes(em)) recipients.push(em);
+  }
+  if (!recipients.length) return;
+  const footerLogoPath = publicPath('rec-logo.jpg');
+  const hasFooterLogo = fs.existsSync(footerLogoPath);
+  const text =
+    `Hello Student,\n\n`
+    + `A class session recording has been published.\n\n`
+    + `Topic: ${recordingMeta.topic || '-'}\n`
+    + `Venue: ${recordingMeta.venue || '-'}\n`
+    + `Session time: ${(recordingMeta.startTime || '-')}${recordingMeta.endTime ? ` to ${recordingMeta.endTime}` : ''}\n`
+    + `Published at: ${recordingMeta.recordedAt ? new Date(recordingMeta.recordedAt).toLocaleString('en-IN') : '-'}\n\n`
+    + `Open Student dashboard → Profile → Session recordings to watch.\n\n`
+    + `${COLLEGE_FOOTER_TEXT}`;
+  const html = `<div style="font-family:Arial,sans-serif;line-height:1.55;color:#24135f"><h3 style="margin:0 0 10px;">Session recording published</h3><p style="margin:0 0 8px;"><b>Topic:</b> ${escapeHtml(recordingMeta.topic || '-')}</p><p style="margin:0 0 8px;"><b>Venue:</b> ${escapeHtml(recordingMeta.venue || '-')}</p><p style="margin:0 0 8px;"><b>Session time:</b> ${escapeHtml(recordingMeta.startTime || '-')}${recordingMeta.endTime ? ` to ${escapeHtml(recordingMeta.endTime)}` : ''}</p><p style="margin:10px 0;">Open <b>Student dashboard → Profile → Session recordings</b> to watch.</p><div style="margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;gap:10px;align-items:flex-start;">${hasFooterLogo ? '<img src="cid:rec-footer-logo" alt="REC logo" style="width:46px;height:46px;object-fit:contain;border-radius:6px;" />' : ''}<p style="margin:0;font-size:12px;color:#6b7280;">${escapeHtml(COLLEGE_FOOTER_TEXT).replace(/\n/g, '<br>')}</p></div></div>`;
+  const mailOptions = {
+    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+    bcc: recipients.join(','),
+    subject: `REC Session recording published: ${String(recordingMeta.topic || 'Class').slice(0, 70)}`,
+    text,
+    html,
+  };
+  if (hasFooterLogo) {
+    mailOptions.attachments = [{ filename: 'rec-logo.jpg', content: fs.readFileSync(footerLogoPath), cid: 'rec-footer-logo' }];
+  }
+  await transporter.sendMail(mailOptions);
+}
 
 app.post('/api/session/:id/intervention', ensureAuthenticated, (req, res) => {
   const sessionId = req.params.id;

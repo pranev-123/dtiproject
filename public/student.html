@@ -1075,6 +1075,7 @@
             <button type="button" class="student-profile-menu-item" id="studentProfileChangePasswordBtn">Change password</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileResumeDocsBtn">Resume & documents</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileViewNotesBtn">Subject topic notes</button>
+            <button type="button" class="student-profile-menu-item" id="studentProfileSessionRecordingsBtn">Session recordings</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileFileToolsBtn">File tools</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileSupportBtn">Support / Contact us</button>
             <button type="button" class="student-profile-menu-item dti-profile-open-whatsapp" id="studentProfileWhatsappBtn" role="menuitem">
@@ -1428,6 +1429,26 @@
       </div>
     </div>
 
+    <div class="od-modal-backdrop" id="sessionRecordingsModalBackdrop" role="dialog" aria-modal="true" aria-label="Session recordings">
+      <div class="od-modal od-modal-wide" style="max-width:640px;">
+        <div class="od-modal-header">
+          <div class="od-modal-title">Session recordings</div>
+          <button type="button" class="od-modal-close" id="btnCloseSessionRecordingsModal" aria-label="Close session recordings">×</button>
+        </div>
+        <div class="od-modal-body">
+          <p class="hint" style="margin-top:0;">Classes your faculty uploaded for sessions you participated in (when attendance is enabled, availability follows attendance rules).</p>
+          <div id="sessionRecordingsList" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+          <div id="sessionRecordingsPlayerWrap" style="display:none;">
+            <video id="sessionRecordingsPlayer" controls playsinline style="width:100%;max-height:46vh;border-radius:10px;background:#111;"></video>
+          </div>
+          <div class="od-modal-status" id="sessionRecordingsModalStatus" aria-live="polite"></div>
+          <div class="od-modal-actions">
+            <button type="button" class="secondary" id="btnCancelSessionRecordingsModal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="od-modal-backdrop" id="resumeDocsModalBackdrop" role="dialog" aria-modal="true" aria-label="Resume documents and AI resume builder">
       <div class="od-modal od-modal-resume-docs">
         <div class="od-modal-header">
@@ -1709,6 +1730,7 @@
       const studentProfileChangePasswordBtn = document.getElementById('studentProfileChangePasswordBtn');
       const studentProfileResumeDocsBtn = document.getElementById('studentProfileResumeDocsBtn');
       const studentProfileViewNotesBtn = document.getElementById('studentProfileViewNotesBtn');
+      const studentProfileSessionRecordingsBtn = document.getElementById('studentProfileSessionRecordingsBtn');
       const studentProfileFileToolsBtn = document.getElementById('studentProfileFileToolsBtn');
       const studentProfileSupportBtn = document.getElementById('studentProfileSupportBtn');
       const studentProfileInboxBtn = document.getElementById('studentProfileInboxBtn');
@@ -1746,6 +1768,14 @@
       const resumeDocsModalBackdrop = document.getElementById('resumeDocsModalBackdrop');
       const btnCloseResumeDocsModal = document.getElementById('btnCloseResumeDocsModal');
       const btnCancelResumeDocsModal = document.getElementById('btnCancelResumeDocsModal');
+      const sessionRecordingsModalBackdrop = document.getElementById('sessionRecordingsModalBackdrop');
+      const btnCloseSessionRecordingsModal = document.getElementById('btnCloseSessionRecordingsModal');
+      const btnCancelSessionRecordingsModal = document.getElementById('btnCancelSessionRecordingsModal');
+      const sessionRecordingsListEl = document.getElementById('sessionRecordingsList');
+      const sessionRecordingsPlayerWrap = document.getElementById('sessionRecordingsPlayerWrap');
+      const sessionRecordingsPlayer = document.getElementById('sessionRecordingsPlayer');
+      const sessionRecordingsModalStatus = document.getElementById('sessionRecordingsModalStatus');
+      let sessionRecordingsBlobUrl = null;
       const studentYoutubeModalBackdrop = document.getElementById('studentYoutubeModalBackdrop');
       const btnCloseStudentYoutubeModal = document.getElementById('btnCloseStudentYoutubeModal');
       const btnCancelStudentYoutubeModal = document.getElementById('btnCancelStudentYoutubeModal');
@@ -2698,6 +2728,7 @@
         if (e.key === 'Escape' && odModalBackdrop && odModalBackdrop.classList.contains('show')) closeOdModal();
         if (e.key === 'Escape' && changePasswordModalBackdrop && changePasswordModalBackdrop.classList.contains('show')) closeChangePasswordModal();
         if (e.key === 'Escape' && resumeDocsModalBackdrop && resumeDocsModalBackdrop.classList.contains('show')) closeResumeDocsModal();
+        if (e.key === 'Escape' && sessionRecordingsModalBackdrop && sessionRecordingsModalBackdrop.classList.contains('show')) closeSessionRecordingsModal();
         if (e.key === 'Escape' && studentYoutubeModalBackdrop && studentYoutubeModalBackdrop.classList.contains('show')) closeStudentYoutubeModal();
       });
       if (btnRefreshOdStatus) {
@@ -5217,6 +5248,138 @@
           openStudentNotesModal();
         });
       }
+
+      function closeSessionRecordingsModal() {
+        if (!sessionRecordingsModalBackdrop) return;
+        sessionRecordingsModalBackdrop.classList.remove('show');
+        if (sessionRecordingsPlayer) {
+          try {
+            sessionRecordingsPlayer.pause();
+            sessionRecordingsPlayer.removeAttribute('src');
+            sessionRecordingsPlayer.load();
+          } catch (_) {}
+        }
+        if (sessionRecordingsBlobUrl) {
+          try {
+            URL.revokeObjectURL(sessionRecordingsBlobUrl);
+          } catch (_) {}
+          sessionRecordingsBlobUrl = null;
+        }
+        if (sessionRecordingsPlayerWrap) sessionRecordingsPlayerWrap.style.display = 'none';
+      }
+
+      function openSessionRecordingsModal() {
+        if (!sessionRecordingsModalBackdrop) return;
+        sessionRecordingsModalBackdrop.classList.add('show');
+        void loadSessionRecordingsList();
+      }
+
+      async function loadSessionRecordingsList() {
+        if (!sessionRecordingsListEl) return;
+        sessionRecordingsListEl.innerHTML = '';
+        if (sessionRecordingsModalStatus) {
+          sessionRecordingsModalStatus.textContent = 'Loading…';
+          sessionRecordingsModalStatus.style.color = '#374151';
+        }
+        try {
+          const res = await fetch('/api/student/session-recordings', { credentials: 'include' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok !== true) {
+            throw new Error((data && data.message) || 'Could not load recordings.');
+          }
+          const rows = Array.isArray(data.recordings) ? data.recordings : [];
+          if (!rows.length) {
+            sessionRecordingsListEl.innerHTML =
+              '<p class="hint" style="margin:0;">No recordings available yet. When faculty uploads a class recording, it will appear here.</p>';
+            if (sessionRecordingsModalStatus) sessionRecordingsModalStatus.textContent = '';
+            return;
+          }
+          rows.forEach(function (r) {
+            const row = document.createElement('div');
+            row.style.cssText =
+              'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid rgba(36,19,95,0.12);background:#faf9ff;';
+            const left = document.createElement('div');
+            left.style.fontSize = '13px';
+            left.style.color = '#24135f';
+            const title = document.createElement('div');
+            title.style.fontWeight = '600';
+            title.textContent = r.topic || r.sessionId || 'Session';
+            const meta = document.createElement('div');
+            meta.style.fontSize = '11px';
+            meta.style.color = '#5c5878';
+            meta.style.marginTop = '4px';
+            const bits = [];
+            if (r.venue) bits.push('Venue: ' + r.venue);
+            if (r.startTime && r.endTime) bits.push(r.startTime + ' → ' + r.endTime);
+            if (r.recordedAt) bits.push('Recorded: ' + new Date(r.recordedAt).toLocaleString());
+            if (r.durationSec) bits.push(Math.round(r.durationSec / 60) + ' min approx.');
+            meta.textContent = bits.join(' · ');
+            left.appendChild(title);
+            left.appendChild(meta);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'secondary';
+            btn.textContent = 'Play';
+            btn.addEventListener('click', function () {
+              void playSessionRecording(r.streamUrl, r.topic || 'Recording');
+            });
+            row.appendChild(left);
+            row.appendChild(btn);
+            sessionRecordingsListEl.appendChild(row);
+          });
+          if (sessionRecordingsModalStatus) sessionRecordingsModalStatus.textContent = '';
+        } catch (e) {
+          if (sessionRecordingsModalStatus) {
+            sessionRecordingsModalStatus.textContent = e && e.message ? e.message : 'Unable to load.';
+            sessionRecordingsModalStatus.style.color = '#c0392b';
+          }
+        }
+      }
+
+      async function playSessionRecording(streamUrl, label) {
+        if (!sessionRecordingsPlayer || !streamUrl) return;
+        if (sessionRecordingsModalStatus) {
+          sessionRecordingsModalStatus.textContent = 'Loading video…';
+          sessionRecordingsModalStatus.style.color = '#374151';
+        }
+        try {
+          const res = await fetch(streamUrl, { credentials: 'include' });
+          if (!res.ok) throw new Error('Could not load recording.');
+          const blob = await res.blob();
+          if (sessionRecordingsBlobUrl) {
+            try {
+              URL.revokeObjectURL(sessionRecordingsBlobUrl);
+            } catch (_) {}
+            sessionRecordingsBlobUrl = null;
+          }
+          sessionRecordingsBlobUrl = URL.createObjectURL(blob);
+          sessionRecordingsPlayer.src = sessionRecordingsBlobUrl;
+          if (sessionRecordingsPlayerWrap) sessionRecordingsPlayerWrap.style.display = 'block';
+          await sessionRecordingsPlayer.play().catch(() => {});
+          if (sessionRecordingsModalStatus) sessionRecordingsModalStatus.textContent = '';
+        } catch (e) {
+          if (sessionRecordingsModalStatus) {
+            sessionRecordingsModalStatus.textContent = e && e.message ? e.message : 'Playback failed.';
+            sessionRecordingsModalStatus.style.color = '#c0392b';
+          }
+        }
+      }
+
+      if (sessionRecordingsModalBackdrop) {
+        sessionRecordingsModalBackdrop.addEventListener('click', function (e) {
+          if (e.target === sessionRecordingsModalBackdrop) closeSessionRecordingsModal();
+        });
+      }
+      if (btnCloseSessionRecordingsModal) btnCloseSessionRecordingsModal.addEventListener('click', closeSessionRecordingsModal);
+      if (btnCancelSessionRecordingsModal) btnCancelSessionRecordingsModal.addEventListener('click', closeSessionRecordingsModal);
+
+      if (studentProfileSessionRecordingsBtn) {
+        studentProfileSessionRecordingsBtn.addEventListener('click', function () {
+          closeStudentProfileDropdown();
+          openSessionRecordingsModal();
+        });
+      }
+
       if (studentProfileFileToolsBtn) {
         studentProfileFileToolsBtn.addEventListener('click', function () {
           closeStudentProfileDropdown();

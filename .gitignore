@@ -11,6 +11,7 @@ data/profile-images/
 data/student-documents/
 data/feed-media/
 data/sleep-alerts/
+data/session-recordings/
 certs/*.pem
 deployment/secrets/*
 !deployment/secrets/.gitkeep

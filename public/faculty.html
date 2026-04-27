@@ -1568,6 +1568,23 @@
             </div>
           </div>
 
+          <div id="facultyFatigueBanner" role="status" style="display:none;margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff8e1;border:1px solid #ffcc80;color:#5d4037;font-size:13px;line-height:1.45;">
+            <strong>Possible fatigue detected</strong> — extended eyes-closed signal on your classroom camera (local analysis). Consider a short break.
+            <button type="button" id="facultyFatigueDismiss" class="secondary" style="margin-left:8px;padding:4px 10px;font-size:12px;">Dismiss</button>
+          </div>
+
+          <div class="student-stream-controls" style="margin-top:14px;" aria-label="Session recording">
+            <div class="student-stream-controls-title">Session recording</div>
+            <p class="hint" id="sessionRecordingMeta" style="margin:6px 0 8px;font-size:12px;">
+              Uses the live student camera feed from this dashboard. Topic, venue, and scheduled times come from Session details below.
+            </p>
+            <div class="student-stream-controls-row" style="gap:8px;flex-wrap:wrap;">
+              <button type="button" class="primary" id="btnStartSessionRecording"><span class="neon-text">Start recording</span></button>
+              <button type="button" class="secondary" id="btnStopSessionRecording" disabled>Stop &amp; upload</button>
+            </div>
+            <p class="hint" id="sessionRecordingStatus" style="margin-top:8px;font-size:12px;color:#5c5878;"></p>
+          </div>
+
           <div class="side-panel" style="margin-top: 18px;">
             <div class="side-section signature-card" id="facultySessionDetailsSection" data-innovation="sessions">
               <div class="side-title">Session details</div>
@@ -3822,11 +3839,323 @@
           classroomCameraEl.srcObject = null;
           classroomCameraEl.src = cfg.stream;
           setCameraStatus('Camera connected to ' + roomId + ' (' + (cfg.camera || 'camera') + ').', true);
+          restartFacultyFatigueMonitoring();
           return;
         }
 
         // Fallback: use faculty laptop webcam when no dedicated classroom camera is configured.
         await useLaptopCameraFallback(roomId);
+        restartFacultyFatigueMonitoring();
+      }
+
+      // ---- Classroom camera: faculty fatigue / sleep-style detection (eyes closed streak) ----
+      const FACULTY_LANDMARK_MODEL_BASE = FACULTY_FACE_MODEL_BASE;
+      const FACULTY_EAR_CLOSED = 0.2;
+      const FACULTY_EAR_OPEN = 0.25;
+      const FACULTY_SLEEP_STREAK_MS = 5000;
+      const FACULTY_FATIGUE_INTERVAL_MS = 880;
+      const FACULTY_FATIGUE_COOLDOWN_MS = 120000;
+      let facultyLandmarkModelsReady = false;
+      let facultyLandmarkModelsLoading = null;
+      let facultyFatigueTimer = null;
+      let facultyFatigueSleepStreakMs = 0;
+      let facultyFatigueLastTs = 0;
+      let lastFacultyFatigueAlertSent = 0;
+      let facultyFatigueHiddenCanvas = null;
+
+      function stopFacultyFatigueMonitoring() {
+        if (facultyFatigueTimer) {
+          clearInterval(facultyFatigueTimer);
+          facultyFatigueTimer = null;
+        }
+        facultyFatigueSleepStreakMs = 0;
+        facultyFatigueLastTs = 0;
+      }
+
+      function restartFacultyFatigueMonitoring() {
+        stopFacultyFatigueMonitoring();
+        if (!currentSessionId || !classroomCameraEl) return;
+        facultyFatigueTimer = setInterval(facultyFatigueTick, FACULTY_FATIGUE_INTERVAL_MS);
+      }
+
+      async function ensureFacultyLandmarkModels() {
+        if (facultyLandmarkModelsReady) return true;
+        if (typeof faceapi === 'undefined' || !faceapi.nets || !faceapi.nets.tinyFaceDetector) return false;
+        if (facultyLandmarkModelsLoading) return facultyLandmarkModelsLoading;
+        facultyLandmarkModelsLoading = (async () => {
+          try {
+            await faceapi.nets.tinyFaceDetector.loadFromUri(FACULTY_LANDMARK_MODEL_BASE);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(FACULTY_LANDMARK_MODEL_BASE);
+            facultyLandmarkModelsReady = true;
+            return true;
+          } catch (e) {
+            console.warn('Faculty landmark models failed', e);
+            return false;
+          } finally {
+            facultyLandmarkModelsLoading = null;
+          }
+        })();
+        return facultyLandmarkModelsLoading;
+      }
+
+      function facultyDist(a, b) {
+        return Math.hypot((a.x || a._x) - (b.x || b._x), (a.y || a._y) - (b.y || b._y));
+      }
+
+      function facultyEyeAspectRatio(eyePoints) {
+        if (!eyePoints || eyePoints.length < 6) return 0;
+        const [p0, p1, p2, p3, p4, p5] = eyePoints;
+        const v1 = facultyDist(p1, p5);
+        const v2 = facultyDist(p2, p4);
+        const h = facultyDist(p0, p3);
+        if (h < 1e-6) return 0;
+        return (v1 + v2) / (2 * h);
+      }
+
+      function facultyEyesClosedFromLandmarks(landmarks) {
+        const leftEye = landmarks.getLeftEye();
+        const rightEye = landmarks.getRightEye();
+        const ear = (facultyEyeAspectRatio(leftEye) + facultyEyeAspectRatio(rightEye)) / 2;
+        return ear <= FACULTY_EAR_CLOSED;
+      }
+
+      async function facultyFatigueTick() {
+        if (!currentSessionId || !classroomCameraEl || classroomCameraEl.readyState < 2) return;
+        const ok = await ensureFacultyLandmarkModels();
+        if (!ok || !classroomCameraEl.videoWidth) return;
+
+        const now = Date.now();
+        const dt = facultyFatigueLastTs ? Math.max(0, now - facultyFatigueLastTs) : FACULTY_FATIGUE_INTERVAL_MS;
+        facultyFatigueLastTs = now;
+
+        try {
+          if (!facultyFatigueHiddenCanvas) {
+            facultyFatigueHiddenCanvas = document.createElement('canvas');
+          }
+          const w = classroomCameraEl.videoWidth;
+          const h = classroomCameraEl.videoHeight;
+          facultyFatigueHiddenCanvas.width = w;
+          facultyFatigueHiddenCanvas.height = h;
+          const ctx = facultyFatigueHiddenCanvas.getContext('2d');
+          if (!ctx) return;
+          ctx.drawImage(classroomCameraEl, 0, 0, w, h);
+          const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 });
+          const dets = await faceapi.detectAllFaces(facultyFatigueHiddenCanvas, opts).withFaceLandmarks();
+          if (!dets.length) {
+            facultyFatigueSleepStreakMs = 0;
+            return;
+          }
+          const best = dets[0];
+          const closed = facultyEyesClosedFromLandmarks(best.landmarks);
+          if (closed) facultyFatigueSleepStreakMs += dt;
+          else facultyFatigueSleepStreakMs = 0;
+
+          if (facultyFatigueSleepStreakMs >= FACULTY_SLEEP_STREAK_MS) {
+            if (now - lastFacultyFatigueAlertSent >= FACULTY_FATIGUE_COOLDOWN_MS) {
+              lastFacultyFatigueAlertSent = now;
+              facultyFatigueSleepStreakMs = 0;
+              void sendFacultyFatigueAlert();
+            }
+          }
+        } catch (e) {
+          console.warn('Faculty fatigue tick', e);
+        }
+      }
+
+      function captureClassroomSnapshotDataUrl() {
+        try {
+          if (!classroomCameraEl || classroomCameraEl.readyState < 2 || !classroomCameraEl.videoWidth) return null;
+          const maxW = 480;
+          const scale = Math.min(1, maxW / classroomCameraEl.videoWidth);
+          const w = Math.max(120, Math.round(classroomCameraEl.videoWidth * scale));
+          const h = Math.max(90, Math.round(classroomCameraEl.videoHeight * scale));
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const ctx = c.getContext('2d');
+          if (!ctx) return null;
+          ctx.drawImage(classroomCameraEl, 0, 0, w, h);
+          return c.toDataURL('image/jpeg', 0.72);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function sendFacultyFatigueAlert() {
+        const banner = document.getElementById('facultyFatigueBanner');
+        if (banner) banner.style.display = 'block';
+        try {
+          await fetch('/api/faculty/fatigue-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              sessionId: currentSessionId,
+              type: 'faculty_sleep_detected',
+              snapshotDataUrl: captureClassroomSnapshotDataUrl(),
+            }),
+          });
+        } catch (_) {}
+        appendChatMessage(
+          'bot',
+          'Classroom camera: possible fatigue signal (eyes closed). Take a short break if needed.'
+        );
+      }
+
+      const facultyFatigueDismissBtn = document.getElementById('facultyFatigueDismiss');
+      if (facultyFatigueDismissBtn) {
+        facultyFatigueDismissBtn.addEventListener('click', function () {
+          const b = document.getElementById('facultyFatigueBanner');
+          if (b) b.style.display = 'none';
+        });
+      }
+
+      // ---- Session recording (student stream → WebM upload with session metadata) ----
+      let sessionMediaRecorder = null;
+      let sessionRecordedChunks = [];
+      let sessionRecordingStartedAt = 0;
+      const btnStartSessionRecording = document.getElementById('btnStartSessionRecording');
+      const btnStopSessionRecording = document.getElementById('btnStopSessionRecording');
+      const sessionRecordingStatus = document.getElementById('sessionRecordingStatus');
+      const sessionRecordingMeta = document.getElementById('sessionRecordingMeta');
+
+      function pickSessionRecorderMimeType() {
+        const candidates = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+        ];
+        for (let i = 0; i < candidates.length; i++) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+        }
+        return '';
+      }
+
+      function updateSessionRecordingMetaLine() {
+        if (!sessionRecordingMeta) return;
+        const topicEl = document.getElementById('topic');
+        const venueEl = document.getElementById('venue');
+        const startEl = document.querySelector('[name="startTime"]');
+        const endEl = document.querySelector('[name="endTime"]');
+        const parts = [];
+        if (topicEl && topicEl.value) parts.push('Topic: ' + topicEl.value);
+        if (venueEl && venueEl.value) parts.push('Venue: ' + venueEl.value);
+        if (startEl && startEl.value && endEl && endEl.value) {
+          parts.push('Time: ' + startEl.value + ' – ' + endEl.value);
+        }
+        sessionRecordingMeta.textContent =
+          parts.length
+            ? parts.join(' · ') + '. Recording uses the live student camera shown above.'
+            : 'Start a session and receive student video to record this class (topic, venue, and schedule come from Session details below).';
+      }
+
+      ['topic', 'venue'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateSessionRecordingMetaLine);
+      });
+      document.querySelectorAll('[name="startTime"], [name="endTime"]').forEach(function (el) {
+        el.addEventListener('change', updateSessionRecordingMetaLine);
+      });
+
+      function stopSessionRecordingPipeline() {
+        sessionRecordedChunks = [];
+        sessionRecordingStartedAt = 0;
+        if (sessionMediaRecorder && sessionMediaRecorder.state !== 'inactive') {
+          try {
+            sessionMediaRecorder.stop();
+          } catch (_) {}
+        }
+        sessionMediaRecorder = null;
+      }
+
+      if (btnStartSessionRecording && btnStopSessionRecording) {
+        btnStartSessionRecording.addEventListener('click', function () {
+          updateSessionRecordingMetaLine();
+          if (!currentSessionId) {
+            alert('Start a session first (Session details).');
+            return;
+          }
+          if (!remoteVideo || !remoteVideo.srcObject) {
+            alert('No student video yet. Ask the student to start streaming.');
+            return;
+          }
+          const mimeType = pickSessionRecorderMimeType();
+          if (!window.MediaRecorder) {
+            alert('Recording is not supported in this browser.');
+            return;
+          }
+          try {
+            const stream = remoteVideo.captureStream ? remoteVideo.captureStream() : null;
+            if (!stream) {
+              alert('Could not capture video stream from the student preview.');
+              return;
+            }
+            sessionRecordedChunks = [];
+            sessionRecordingStartedAt = Date.now();
+            sessionMediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            sessionMediaRecorder.ondataavailable = function (e) {
+              if (e.data && e.data.size > 0) sessionRecordedChunks.push(e.data);
+            };
+            sessionMediaRecorder.onerror = function () {
+              if (sessionRecordingStatus) sessionRecordingStatus.textContent = 'Recording error.';
+            };
+            sessionMediaRecorder.onstop = async function () {
+              btnStartSessionRecording.disabled = false;
+              btnStopSessionRecording.disabled = true;
+              const blob = new Blob(sessionRecordedChunks, { type: sessionMediaRecorder.mimeType || 'video/webm' });
+              sessionRecordedChunks = [];
+              const durationSec = sessionRecordingStartedAt ? Math.round((Date.now() - sessionRecordingStartedAt) / 1000) : 0;
+              sessionRecordingStartedAt = 0;
+              if (!blob.size) {
+                if (sessionRecordingStatus) sessionRecordingStatus.textContent = 'Recording empty — try again.';
+                return;
+              }
+              if (sessionRecordingStatus) sessionRecordingStatus.textContent = 'Uploading recording…';
+              try {
+                const fd = new FormData();
+                fd.append('sessionId', currentSessionId);
+                fd.append('durationSec', String(durationSec));
+                const ext = blob.type.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+                fd.append('recording', blob, 'session-' + currentSessionId + '.' + ext);
+                const res = await fetch('/api/faculty/session-recording', {
+                  method: 'POST',
+                  credentials: 'include',
+                  body: fd,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data || data.ok !== true) {
+                  throw new Error((data && data.message) || 'Upload failed.');
+                }
+                if (sessionRecordingStatus) {
+                  sessionRecordingStatus.textContent =
+                    'Saved. Students signed in can open Session recordings from their profile menu.';
+                  sessionRecordingStatus.style.color = '#1565c0';
+                }
+              } catch (e) {
+                if (sessionRecordingStatus) {
+                  sessionRecordingStatus.textContent = e && e.message ? e.message : 'Upload failed.';
+                  sessionRecordingStatus.style.color = '#c0392b';
+                }
+              }
+            };
+            sessionMediaRecorder.start(1000);
+            btnStartSessionRecording.disabled = true;
+            btnStopSessionRecording.disabled = false;
+            if (sessionRecordingStatus) {
+              sessionRecordingStatus.style.color = '#374151';
+              sessionRecordingStatus.textContent = 'Recording… Stop when class segment ends.';
+            }
+          } catch (e) {
+            alert(e && e.message ? e.message : 'Could not start recording.');
+          }
+        });
+
+        btnStopSessionRecording.addEventListener('click', function () {
+          if (!sessionMediaRecorder || sessionMediaRecorder.state === 'inactive') return;
+          try {
+            sessionMediaRecorder.stop();
+          } catch (_) {}
+        });
       }
 
       // ---- Smart Attendance (hand-raise) table loader - network-resilient for poor WiFi ----
@@ -5302,6 +5631,8 @@
           if (data.ok) {
             currentSessionId = data.sessionId;
             btnEndSession.disabled = false;
+            restartFacultyFatigueMonitoring();
+            updateSessionRecordingMetaLine();
             applyClassroomConfig(selectedRoom);
             if (socket) {
               socket.emit('start-session', {
@@ -5347,6 +5678,12 @@
               alert('Session ended. ' + emailMsg);
               btnStartSession.disabled = false;
               btnEndSession.disabled = true;
+              stopFacultyFatigueMonitoring();
+              if (sessionMediaRecorder && sessionMediaRecorder.state === 'recording') {
+                try {
+                  sessionMediaRecorder.stop();
+                } catch (_) {}
+              }
               currentSessionId = null;
               if (attendanceRefreshInterval) {
                 clearInterval(attendanceRefreshInterval);
