@@ -361,6 +361,51 @@
           btnRegister.disabled = false;
         }
       });
+
+      // Innovation upgrade: draft autosave + completion meter for student registration.
+      (function initStudentRegisterAssist() {
+        const fields = Array.from(form.querySelectorAll('input, select')).filter((el) => el && el.name);
+        const requiredFields = fields.filter((el) => el.required);
+        const storageKey = 'rec-student-register-draft-v1';
+        const meterWrap = document.createElement('div');
+        meterWrap.style.cssText = 'margin:8px 0 12px;';
+        meterWrap.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#6f6891;margin-bottom:4px;">'
+          + '<span>Form completion</span><span id="regCompletionPct">0%</span></div>'
+          + '<div style="height:7px;background:#ece9f8;border-radius:999px;overflow:hidden;">'
+          + '<div id="regCompletionBar" style="height:100%;width:0%;background:linear-gradient(90deg,#5c2eb8,#00bcd4);transition:width .2s ease;"></div></div>';
+        form.insertBefore(meterWrap, form.firstElementChild);
+        const pctEl = meterWrap.querySelector('#regCompletionPct');
+        const barEl = meterWrap.querySelector('#regCompletionBar');
+        function refreshCompletion() {
+          const done = requiredFields.filter((el) => String(el.value || '').trim() !== '').length;
+          const pct = requiredFields.length ? Math.round((done / requiredFields.length) * 100) : 0;
+          if (pctEl) pctEl.textContent = pct + '%';
+          if (barEl) barEl.style.width = pct + '%';
+        }
+        function saveDraft() {
+          const payload = {};
+          fields.forEach((el) => { payload[el.name] = el.value; });
+          try { localStorage.setItem(storageKey, JSON.stringify(payload)); } catch (_) {}
+        }
+        function restoreDraft() {
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') return;
+            fields.forEach((el) => {
+              if (data[el.name] != null && String(el.value || '').trim() === '') el.value = String(data[el.name]);
+            });
+          } catch (_) {}
+        }
+        restoreDraft();
+        refreshCompletion();
+        fields.forEach((el) => {
+          el.addEventListener('input', function () { saveDraft(); refreshCompletion(); });
+          el.addEventListener('change', function () { saveDraft(); refreshCompletion(); });
+        });
+      })();
     </script>
   </body>
 </html>

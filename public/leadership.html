@@ -2769,6 +2769,53 @@
           }
         }, 2200);
       }
+
+      // Innovation upgrade: leadership local "Innovation Lab" for decision notes and sprint timer.
+      (function initInnovationLabLeadership() {
+        const storagePrefix = 'rec-innovation-lab-leadership';
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;right:16px;bottom:18px;z-index:99999;font-family:inherit;';
+        host.innerHTML =
+          '<button type="button" id="innovationLabFab" style="border:none;border-radius:999px;padding:10px 14px;background:#3730a3;color:#fff;font-weight:700;cursor:pointer;box-shadow:0 10px 20px rgba(55,48,163,.35);">Innovation Lab</button>'
+          + '<div id="innovationLabPanel" style="display:none;margin-top:8px;width:min(320px,92vw);background:#fff;border:1px solid rgba(36,19,95,.15);border-radius:12px;padding:10px;box-shadow:0 16px 35px rgba(0,0,0,.2);">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><strong style="font-size:13px;color:#24135f;">Leadership Innovation Lab</strong><button id="innovationLabClose" type="button" style="border:0;background:transparent;font-size:16px;cursor:pointer;">×</button></div>'
+          + '<textarea id="innovationLabNotes" placeholder="Decision notes / action items..." style="margin-top:8px;width:100%;min-height:74px;border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:12px;"></textarea>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><span id="innovationLabTimer" style="font-size:12px;color:#4b5563;">Review timer: 00:00</span><div style="display:flex;gap:6px;"><button id="innovationLabTimerToggle" type="button" class="secondary" style="padding:4px 10px;">Start</button><button id="innovationLabTimerReset" type="button" class="secondary" style="padding:4px 10px;">Reset</button></div></div>'
+          + '<button id="innovationLabCopy" type="button" class="secondary" style="margin-top:8px;width:100%;padding:7px 10px;">Copy executive snapshot</button>'
+          + '</div>';
+        document.body.appendChild(host);
+        const fab = host.querySelector('#innovationLabFab');
+        const panel = host.querySelector('#innovationLabPanel');
+        const closeBtn = host.querySelector('#innovationLabClose');
+        const notes = host.querySelector('#innovationLabNotes');
+        const timerEl = host.querySelector('#innovationLabTimer');
+        const timerToggle = host.querySelector('#innovationLabTimerToggle');
+        const timerReset = host.querySelector('#innovationLabTimerReset');
+        const copyBtn = host.querySelector('#innovationLabCopy');
+        let t0 = Number(localStorage.getItem(storagePrefix + ':t0') || 0);
+        let elapsed = Number(localStorage.getItem(storagePrefix + ':elapsed') || 0);
+        let ticking = false;
+        let intId = 0;
+        try { notes.value = localStorage.getItem(storagePrefix + ':notes') || ''; } catch (_) {}
+        function fmt(ms) { const s = Math.floor(Math.max(0, ms) / 1000); const m = String(Math.floor(s / 60)).padStart(2, '0'); const r = String(s % 60).padStart(2, '0'); return m + ':' + r; }
+        function nowElapsed() { return ticking ? (elapsed + (Date.now() - t0)) : elapsed; }
+        function renderTimer() { if (timerEl) timerEl.textContent = 'Review timer: ' + fmt(nowElapsed()); if (timerToggle) timerToggle.textContent = ticking ? 'Pause' : 'Start'; }
+        function startTick() { if (intId) clearInterval(intId); intId = setInterval(renderTimer, 500); }
+        renderTimer(); startTick();
+        if (fab) fab.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
+        if (closeBtn) closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+        if (notes) notes.addEventListener('input', () => { try { localStorage.setItem(storagePrefix + ':notes', notes.value || ''); } catch (_) {} });
+        if (timerToggle) timerToggle.addEventListener('click', () => {
+          if (!ticking) { ticking = true; t0 = Date.now(); try { localStorage.setItem(storagePrefix + ':t0', String(t0)); } catch (_) {} }
+          else { elapsed = nowElapsed(); ticking = false; try { localStorage.setItem(storagePrefix + ':elapsed', String(elapsed)); localStorage.removeItem(storagePrefix + ':t0'); } catch (_) {} }
+          renderTimer();
+        });
+        if (timerReset) timerReset.addEventListener('click', () => { ticking = false; elapsed = 0; t0 = 0; try { localStorage.removeItem(storagePrefix + ':t0'); localStorage.setItem(storagePrefix + ':elapsed', '0'); } catch (_) {} renderTimer(); });
+        if (copyBtn) copyBtn.addEventListener('click', async () => {
+          const payload = `Leadership snapshot\nReview timer: ${fmt(nowElapsed())}\nNotes: ${(notes && notes.value) || '-'}\nGenerated: ${new Date().toLocaleString()}`;
+          try { await navigator.clipboard.writeText(payload); copyBtn.textContent = 'Copied'; setTimeout(() => { copyBtn.textContent = 'Copy executive snapshot'; }, 1000); } catch (_) {}
+        });
+      })();
     </script>
     <script src="/dti-notifications.js"></script>
     <script src="/dti-whatsapp.js"></script>

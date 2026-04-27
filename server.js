@@ -700,6 +700,7 @@ const transporter = nodemailer.createTransport({
 
 const PASSWORD_FORMAT_MODE = String(process.env.PASSWORD_FORMAT_MODE || 'fixed').trim().toLowerCase();
 const RANDOM_PASSWORD_LENGTH = Math.min(32, Math.max(10, Number(process.env.RANDOM_PASSWORD_LENGTH) || 14));
+const FACULTY_MIN_PASSWORD_LENGTH = Math.max(10, Math.min(64, Number(process.env.FACULTY_MIN_PASSWORD_LENGTH) || 12));
 
 function generateRandomCredentialPassword(length = RANDOM_PASSWORD_LENGTH) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%&*+-_!';
@@ -733,15 +734,46 @@ function generateStudentInitialPassword(departmentRaw, registerNumberRaw) {
 }
 
 function getInitialPasswordForRole(role, opts = {}) {
+  if (role === 'faculty' || role === 'leadership') {
+    // Faculty/leadership credentials must always be non-guessable.
+    return generateRandomCredentialPassword(Math.max(RANDOM_PASSWORD_LENGTH, FACULTY_MIN_PASSWORD_LENGTH));
+  }
   const mode = PASSWORD_FORMAT_MODE === 'random' ? 'random' : 'fixed';
   if (mode === 'random') return generateRandomCredentialPassword();
-  if (role === 'faculty' || role === 'leadership') {
-    return buildStaffPhonePassword(opts.staffId, opts.mobile || '');
-  }
   if (role === 'student') {
     return generateStudentInitialPassword(opts.departmentCode || '', opts.registerNumber || '');
   }
   return '';
+}
+
+function validateStrongFacultyPassword(pwd, userRec, emailRaw) {
+  const value = String(pwd || '');
+  if (value.length < FACULTY_MIN_PASSWORD_LENGTH || value.length > 128) {
+    return {
+      ok: false,
+      message: `New password must be ${FACULTY_MIN_PASSWORD_LENGTH}-128 characters.`,
+    };
+  }
+  if (!/[A-Z]/.test(value) || !/[a-z]/.test(value) || !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value)) {
+    return {
+      ok: false,
+      message: 'New password must include uppercase, lowercase, number, and special character.',
+    };
+  }
+  const lowered = value.toLowerCase();
+  const email = String(emailRaw || '').trim().toLowerCase();
+  const localPart = email.includes('@') ? email.split('@')[0] : email;
+  const staffId = String((userRec && userRec.staffId) || '').trim().toLowerCase();
+  const name = String((userRec && userRec.name) || '').trim().toLowerCase();
+  const namePieces = name.split(/\s+/).filter(Boolean);
+  const bannedParts = [localPart, staffId].concat(namePieces).filter((x) => x && x.length >= 3);
+  if (bannedParts.some((part) => lowered.includes(part))) {
+    return {
+      ok: false,
+      message: 'New password must not include your email name, staff ID, or personal name parts.',
+    };
+  }
+  return { ok: true };
 }
 
 /**
@@ -5992,8 +6024,9 @@ app.post('/api/change-password', ensureAuthenticated, async (req, res) => {
   if (!validCurrent) {
     return res.status(401).json({ ok: false, message: 'Current password is incorrect.' });
   }
-  if (newPwd.length < 6 || newPwd.length > 32) {
-    return res.status(400).json({ ok: false, message: 'New password must be 6–32 characters.' });
+  const strong = validateStrongFacultyPassword(newPwd, user, email);
+  if (!strong.ok) {
+    return res.status(400).json({ ok: false, message: strong.message });
   }
 
   user.hashedPassword = await bcrypt.hash(newPwd, BCRYPT_ROUNDS);
