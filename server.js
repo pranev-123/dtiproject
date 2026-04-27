@@ -6009,61 +6009,72 @@ app.post('/api/change-password', ensureAuthenticated, async (req, res) => {
 let sessionCounter = 1;
 
 app.post('/api/session/start', ensureAuthenticated, (req, res) => {
-  const { topic, venue, startTime, endTime, sessionMode } = req.body;
-  if (!topic || !venue || !startTime || !endTime) {
-    return res
-      .status(400)
-      .json({ ok: false, message: 'Topic, venue, start time and end time are required.' });
+  try {
+    const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+    const topic = String(body.topic || '').trim();
+    const venue = String(body.venue || '').trim();
+    const startTime = String(body.startTime || '').trim();
+    const endTime = String(body.endTime || '').trim();
+    const sessionMode = String(body.sessionMode || 'lecture').trim().toLowerCase();
+
+    if (!topic || !venue || !startTime || !endTime) {
+      return res
+        .status(400)
+        .json({ ok: false, message: 'Topic, venue, start time and end time are required.' });
+    }
+
+    const id = `S${sessionCounter++}`;
+    sessions[id] = {
+      id,
+      ownerEmail: req.session.userEmail,
+      topic,
+      venue,
+      startTime,
+      endTime,
+      createdAt: new Date().toISOString(),
+      attentionHistory: [], // { t, score }
+      studentAttentionHistory: {}, // registerNumber -> [{ t, score, sourceType }]
+      alerts: [], // { t, message }
+      deviceIds: {}, // deviceId -> lastSeen (ISO) for connected-device count
+      closed: false,
+      paused: false,
+      // Zone-level attention (privacy-safe: no identities, no counts, only aggregate per zone)
+      zoneHistory: {
+        frontBench: [],
+        middleBenches: [],
+        lastBench: [],
+        lastRightCornerBench: [],
+        lastLeftCornerBench: [],
+      },
+      confusionCount: 0, // Anonymous "I'm confused" signals for lecture quality
+      // Module 3: AI attention prediction (last 10 samples, every 5s; 4 consecutive negative → alert; 2 min cooldown)
+      attentionPredictionHistory: [],
+      lastPredictionSampleTime: 0,
+      lastPredictionAt: 0,
+      // Per-session signing key for attention payload integrity (HMAC); never store plain passwords
+      signingKey: security.secureSessionToken(),
+      sessionMode,
+      interventions: [], // { id, type, label, startedAt, baselineAttention, durationMs }
+      activeIntervention: null,
+      classroomActivities: [], // [{id,type,question,options,optionCounts,responsesByRegister,createdAt,sessionId}]
+      behaviorAlerts: [],
+      behaviorAlertCooldownByKey: {},
+      lastAttentionSampleAtByKey: {},
+    };
+
+    // Keep global active session in sync with HTTP start (students poll /api/session-status; Socket may be late).
+    lastActiveSessionId = id;
+    globalSessionActive = true;
+    io.emit('active-session', { sessionId: id });
+    emitSessionScoped('active-session', id, { sessionId: id });
+    // Broadcast session started so student dashboard can disable voice assistant during lecture.
+    emitSessionScoped('session-status', id, { status: 'started', sessionId: id });
+    persistSessionToMongo(sessions[id]);
+    return res.json({ ok: true, sessionId: id });
+  } catch (err) {
+    console.error('Session start failed:', err);
+    return res.status(500).json({ ok: false, message: 'Unable to start session.' });
   }
-
-  const id = `S${sessionCounter++}`;
-  sessions[id] = {
-    id,
-    ownerEmail: req.session.userEmail,
-    topic,
-    venue,
-    startTime,
-    endTime,
-    createdAt: new Date().toISOString(),
-    attentionHistory: [], // { t, score }
-    studentAttentionHistory: {}, // registerNumber -> [{ t, score, sourceType }]
-    alerts: [], // { t, message }
-    deviceIds: {}, // deviceId -> lastSeen (ISO) for connected-device count
-    closed: false,
-    paused: false,
-    // Zone-level attention (privacy-safe: no identities, no counts, only aggregate per zone)
-    zoneHistory: {
-      frontBench: [],
-      middleBenches: [],
-      lastBench: [],
-      lastRightCornerBench: [],
-      lastLeftCornerBench: [],
-    },
-    confusionCount: 0, // Anonymous "I'm confused" signals for lecture quality
-    // Module 3: AI attention prediction (last 10 samples, every 5s; 4 consecutive negative → alert; 2 min cooldown)
-    attentionPredictionHistory: [],
-    lastPredictionSampleTime: 0,
-    lastPredictionAt: 0,
-    // Per-session signing key for attention payload integrity (HMAC); never store plain passwords
-    signingKey: security.secureSessionToken(),
-    sessionMode: String(sessionMode || 'lecture').trim().toLowerCase(),
-    interventions: [], // { id, type, label, startedAt, baselineAttention, durationMs }
-    activeIntervention: null,
-    classroomActivities: [], // [{id,type,question,options,optionCounts,responsesByRegister,createdAt,sessionId}]
-    behaviorAlerts: [],
-    behaviorAlertCooldownByKey: {},
-    lastAttentionSampleAtByKey: {},
-  };
-
-  // Keep global active session in sync with HTTP start (students poll /api/session-status; Socket may be late).
-  lastActiveSessionId = id;
-  globalSessionActive = true;
-  io.emit('active-session', { sessionId: id });
-  emitSessionScoped('active-session', id, { sessionId: id });
-  // Broadcast session started so student dashboard can disable voice assistant during lecture.
-  emitSessionScoped('session-status', id, { status: 'started', sessionId: id });
-  persistSessionToMongo(sessions[id]);
-  return res.json({ ok: true, sessionId: id });
 });
 
 function parseSnapshotDataUrl(dataUrl) {
