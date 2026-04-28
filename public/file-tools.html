@@ -157,6 +157,18 @@
         </div>
         <div class="status" id="imgMergeStatus"></div>
       </div>
+      <div class="card">
+        <h3>PDF to QR</h3>
+        <input type="file" id="pdfToQrInput" accept=".pdf,application/pdf" />
+        <div class="row"><button class="btn" id="pdfToQrBtn">Convert + Download QR ZIP</button></div>
+        <div class="status" id="pdfToQrStatus"></div>
+      </div>
+      <div class="card">
+        <h3>DOCX to QR</h3>
+        <input type="file" id="docxToQrInput" accept=".docx" />
+        <div class="row"><button class="btn" id="docxToQrBtn">Convert + Download QR ZIP</button></div>
+        <div class="status" id="docxToQrStatus"></div>
+      </div>
     </div>
   </div>
   <button class="buddy-fab" id="buddyFab" aria-label="Open REC Buddy AI">
@@ -193,6 +205,7 @@
   <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script>
     function setStatus(id, text, ok) {
       const el = document.getElementById(id);
@@ -205,6 +218,53 @@
       const a = document.createElement('a');
       a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+    async function extractPdfText(file) {
+      const bytes = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      let full = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const t = (content.items || []).map(it => (it && it.str) ? it.str : '').join(' ');
+        full += t + '\n\n';
+      }
+      return full.trim();
+    }
+    async function extractDocxText(file) {
+      const arr = await file.arrayBuffer();
+      const extracted = await mammoth.extractRawText({ arrayBuffer: arr });
+      return String(extracted.value || '').trim();
+    }
+    function splitForQr(text, maxLen) {
+      const source = String(text || '').trim();
+      if (!source) return [];
+      const chunks = [];
+      let i = 0;
+      while (i < source.length) {
+        chunks.push(source.slice(i, i + maxLen));
+        i += maxLen;
+      }
+      if (chunks.length <= 1) return chunks;
+      return chunks.map((c, idx) => `Part ${idx + 1}/${chunks.length}\n${c}`);
+    }
+    async function buildQrZipFromText(text, baseName) {
+      const chunks = splitForQr(text, 900);
+      if (!chunks.length) throw new Error('No readable text found in file.');
+      const zip = new JSZip();
+      for (let i = 0; i < chunks.length; i++) {
+        const dataUrl = await QRCode.toDataURL(chunks[i], {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 768,
+        });
+        const b64 = String(dataUrl).split(',')[1] || '';
+        zip.file(`${baseName}_qr_${i + 1}.png`, b64, { base64: true });
+      }
+      return {
+        blob: await zip.generateAsync({ type: 'blob' }),
+        parts: chunks.length,
+      };
     }
     async function fileToDataURL(file) {
       return await new Promise((resolve, reject) => {
@@ -388,6 +448,34 @@
         downloadBlob(pdf.output('blob'), 'merged_image.pdf');
         setStatus('imgMergeStatus', 'Downloaded merged PDF.', true);
       } catch (e) { setStatus('imgMergeStatus', 'Merge failed.', false); }
+    });
+
+    document.getElementById('pdfToQrBtn').addEventListener('click', async () => {
+      const f = document.getElementById('pdfToQrInput').files[0];
+      if (!f) return setStatus('pdfToQrStatus', 'Choose a PDF file.', false);
+      try {
+        setStatus('pdfToQrStatus', 'Reading PDF and generating QR...');
+        const text = await extractPdfText(f);
+        const out = await buildQrZipFromText(text, f.name.replace(/\.pdf$/i, '') || 'pdf');
+        downloadBlob(out.blob, f.name.replace(/\.pdf$/i, '') + '_qr.zip');
+        setStatus('pdfToQrStatus', `Downloaded QR ZIP (${out.parts} QR code${out.parts > 1 ? 's' : ''}).`, true);
+      } catch (e) {
+        setStatus('pdfToQrStatus', 'Conversion failed. Ensure PDF contains readable text.', false);
+      }
+    });
+
+    document.getElementById('docxToQrBtn').addEventListener('click', async () => {
+      const f = document.getElementById('docxToQrInput').files[0];
+      if (!f) return setStatus('docxToQrStatus', 'Choose a DOCX file.', false);
+      try {
+        setStatus('docxToQrStatus', 'Reading DOCX and generating QR...');
+        const text = await extractDocxText(f);
+        const out = await buildQrZipFromText(text, f.name.replace(/\.docx$/i, '') || 'docx');
+        downloadBlob(out.blob, f.name.replace(/\.docx$/i, '') + '_qr.zip');
+        setStatus('docxToQrStatus', `Downloaded QR ZIP (${out.parts} QR code${out.parts > 1 ? 's' : ''}).`, true);
+      } catch (e) {
+        setStatus('docxToQrStatus', 'Conversion failed. Ensure DOCX contains readable text.', false);
+      }
     });
 
     // REC Buddy AI chatbot (File Tools)
