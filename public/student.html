@@ -1111,6 +1111,14 @@
               <span id="statusText">Offline</span>
             </div>
           </div>
+          <div class="video-container" style="margin-top:12px;">
+            <video id="facultyScreenVideo" autoplay playsinline controls style="background:#111;"></video>
+            <div class="video-label">Faculty Screen Share</div>
+            <div class="status-indicator">
+              <span class="status-dot" id="facultyScreenShareDot" style="background:#c0392b;"></span>
+              <span id="facultyScreenShareText">Faculty screen share is not active.</span>
+            </div>
+          </div>
 
           <aside class="side-panel">
             <div class="side-section session-controls-plain" id="studentSessionControlsSection" data-innovation="session">
@@ -1665,6 +1673,9 @@
       const studentOpticalZoomLabel = document.getElementById('studentOpticalZoomLabel');
       const btnStartStream = document.getElementById('btnStartStream');
       const btnStopStream = document.getElementById('btnStopStream');
+      const facultyScreenVideo = document.getElementById('facultyScreenVideo');
+      const facultyScreenShareDot = document.getElementById('facultyScreenShareDot');
+      const facultyScreenShareText = document.getElementById('facultyScreenShareText');
       const statusDot = document.getElementById('statusDot');
       const statusText = document.getElementById('statusText');
       const facultyDot = document.getElementById('facultyDot');
@@ -2116,6 +2127,7 @@
 
       let localStream = null;
       let peerConnection = null;
+      let screenSharePeerConnection = null;
       let socket = null;
       let facultyOnline = false;
       let currentSessionId = null;
@@ -2158,8 +2170,10 @@
       // Phone use heuristic: sustained gaze-down while not in note-taking mode.
       let sleepStreakMs = 0;
       let phoneStreakMs = 0;
+      let talkingStreakMs = 0;
       let fraudSleepDetected = false;
       let fraudPhoneDetected = false;
+      let fraudTalkingDetected = false;
       let fraudPhoneDetectedByModel = false;
       let attentionLastFaceDetectedAt = 0;
       const ATTENTION_FACE_STICKY_MS = 4000; // tolerate short detector drops while user is still facing camera
@@ -2180,6 +2194,8 @@
       let lastFraudStreakAt = null;
       const SLEEP_EYES_CLOSED_MS = 5000;
       const PHONE_GAZE_DOWN_MS = 7000;
+      const TALKING_MOUTH_OPEN_MS = 4500;
+      const MOUTH_OPEN_RATIO_THRESHOLD = 0.58;
       const PHONE_DETECT_INTERVAL_MS = 1600;
       const PHONE_MODEL_CONFIDENCE_THRESHOLD = 0.6;
       const PHONE_STREAK_GAP_MS = 2000; // tolerate brief misses
@@ -2201,7 +2217,7 @@
       let sessionCurrentlyActive = false;
       let attentionScoreEnabledByStreaming = false;
       let lastFlashedActivityId = '';
-      let lastBehaviorAlertSentAt = { sleep_detected: 0, headset_missing: 0 };
+      let lastBehaviorAlertSentAt = { sleep_detected: 0, headset_missing: 0, talking_detected: 0 };
       let headsetConnected = null;
       let lastHeadsetCheckAt = 0;
       const HEADSET_CHECK_INTERVAL_MS = 10000;
@@ -2209,6 +2225,26 @@
       let lastActiveSessionIdForFeedback = null;
       // Gate: block camera / streaming until faculty has started a session (privacy + integrity).
       let sessionGateCheckedOnce = false;
+
+      function setFacultyScreenShareLive(isLive) {
+        if (facultyScreenShareDot) facultyScreenShareDot.style.background = isLive ? '#1cc57a' : '#c0392b';
+        if (facultyScreenShareText) {
+          facultyScreenShareText.textContent = isLive
+            ? 'Faculty screen is live.'
+            : 'Faculty screen share is not active.';
+        }
+      }
+
+      function stopFacultyScreenPlayback() {
+        if (screenSharePeerConnection) {
+          try { screenSharePeerConnection.close(); } catch (_) {}
+          screenSharePeerConnection = null;
+        }
+        if (facultyScreenVideo) {
+          try { facultyScreenVideo.srcObject = null; } catch (_) {}
+        }
+        setFacultyScreenShareLive(false);
+      }
 
       // FAQ chatbot (local-only) data. Same FAQs train the REC EduMate voice assistant; extra patterns improve speech-to-text matching.
       const helpFaqs = [
@@ -2922,6 +2958,21 @@
         return (v1 + v2) / (2 * h);
       }
 
+      function mouthOpenRatio(mouthPoints) {
+        if (!mouthPoints || mouthPoints.length < 12) return 0;
+        const left = mouthPoints[0];
+        const right = mouthPoints[6];
+        const topA = mouthPoints[2];
+        const bottomA = mouthPoints[10];
+        const topB = mouthPoints[3];
+        const bottomB = mouthPoints[9];
+        const width = dist(left, right);
+        if (width < 1e-6) return 0;
+        const openA = dist(topA, bottomA);
+        const openB = dist(topB, bottomB);
+        return (openA + openB) / (2 * width);
+      }
+
       function headOrientation(landmarks) {
         const nose = landmarks.getNose();
         const jaw = landmarks.getJawOutline();
@@ -2991,9 +3042,12 @@
       function computeAttentionFromCv(landmarks) {
         const leftEye = landmarks.getLeftEye();
         const rightEye = landmarks.getRightEye();
+        const mouth = landmarks.getMouth();
         const earLeft = eyeAspectRatio(leftEye);
         const rightEAR = eyeAspectRatio(rightEye);
         const ear = (earLeft + rightEAR) / 2;
+        const mar = mouthOpenRatio(mouth);
+        const mouthOpen = mar >= MOUTH_OPEN_RATIO_THRESHOLD;
         const eyesOpen = ear >= EAR_THRESHOLD_OPEN;
         const eyesClosed = ear <= EAR_THRESHOLD_CLOSED;
         const { yaw, pitch } = headOrientation(landmarks);
@@ -3012,6 +3066,8 @@
           headPitch: Math.round(pitch * 100) / 100,
           eyesOpen: eyesOpen,
           eyesClosed: eyesClosed,
+          mar,
+          mouthOpen,
         };
       }
 
@@ -3333,13 +3389,21 @@
                   result.gaze === 'down' &&
                   result.eyesOpen &&
                   result.ear >= EAR_THRESHOLD_OPEN;
+                const isTalkingFrame =
+                  !!result.mouthOpen &&
+                  !result.eyesClosed &&
+                  result.gaze !== 'down';
                 if (isSleepFrame) sleepStreakMs += dt;
                 else sleepStreakMs = 0;
                 if (isPhoneFrame) phoneStreakMs += dt;
                 else phoneStreakMs = 0;
+                if (isTalkingFrame) talkingStreakMs += dt;
+                else talkingStreakMs = 0;
                 fraudSleepDetected = sleepStreakMs >= SLEEP_EYES_CLOSED_MS;
                 fraudPhoneDetected = phoneStreakMs >= PHONE_GAZE_DOWN_MS;
+                fraudTalkingDetected = talkingStreakMs >= TALKING_MOUTH_OPEN_MS;
                 if (fraudSleepDetected) sendBehaviorAlert('sleep_detected');
+                if (fraudTalkingDetected) sendBehaviorAlert('talking_detected');
                 if (headsetConnected === false) sendBehaviorAlert('headset_missing');
                 if (faceStatusText) {
                   faceStatusText.textContent = 'Attention monitoring active';
@@ -3347,7 +3411,8 @@
                 }
                 cvStatusText.textContent =
                   'Gaze: ' + result.gaze + ' | Head: yaw ' + result.headYaw + ', pitch ' + result.headPitch +
-                  ' | Eyes: ' + (result.eyesOpen ? 'open' : result.eyesClosed ? 'closed' : 'partial') + ' (EAR ' + result.ear.toFixed(2) + ')';
+                  ' | Eyes: ' + (result.eyesOpen ? 'open' : result.eyesClosed ? 'closed' : 'partial') + ' (EAR ' + result.ear.toFixed(2) + ')'
+                  + ' | Mouth: ' + (result.mouthOpen ? 'open' : 'closed') + ' (MAR ' + result.mar.toFixed(2) + ')';
               } else {
                 const recentlySeenFace = (now - attentionLastFaceDetectedAt) < ATTENTION_FACE_STICKY_MS;
                 if (recentlySeenFace && lastCvMeta) {
@@ -3363,8 +3428,10 @@
                   // If CV cannot see face for sustained time, pause attention and clear streaks.
                   sleepStreakMs = 0;
                   phoneStreakMs = 0;
+                  talkingStreakMs = 0;
                   fraudSleepDetected = false;
                   fraudPhoneDetected = false;
+                  fraudTalkingDetected = false;
                   lastFraudStreakAt = null;
                   if (faceStatusText) {
                     faceStatusText.textContent = 'Face not detected. Attention paused.';
@@ -3376,16 +3443,20 @@
             } catch (e) {
               sleepStreakMs = 0;
               phoneStreakMs = 0;
+              talkingStreakMs = 0;
               fraudSleepDetected = false;
               fraudPhoneDetected = false;
+              fraudTalkingDetected = false;
               lastFraudStreakAt = null;
               cvStatusText.textContent = 'CV: ' + (e.message || 'error') + '. Waiting for face.';
             }
           } else {
             sleepStreakMs = 0;
             phoneStreakMs = 0;
+            talkingStreakMs = 0;
             fraudSleepDetected = false;
             fraudPhoneDetected = false;
+            fraudTalkingDetected = false;
             lastFraudStreakAt = null;
             cvStatusText.textContent = 'CV models loading or camera not ready. Attention score will appear after face is detected.';
           }
@@ -3899,7 +3970,7 @@
         if (now - last < BEHAVIOR_ALERT_COOLDOWN_MS) return;
         lastBehaviorAlertSentAt[type] = now;
         let snapshotDataUrl = null;
-        if (type === 'sleep_detected') {
+        if (type === 'sleep_detected' || type === 'talking_detected') {
           snapshotDataUrl = captureBehaviorSnapshotDataUrl();
         }
         try {
@@ -3968,6 +4039,7 @@
           } else {
             stopOdStatusPolling();
             if (odStatusCard) odStatusCard.style.display = 'none';
+            stopFacultyScreenPlayback();
             if (sessionEverActive) {
               handleSessionEnd();
             } else {
@@ -4030,6 +4102,7 @@
           if (role === 'faculty') {
             setFacultyOnline(false);
             stopStreaming();
+            stopFacultyScreenPlayback();
           }
         });
 
@@ -4048,6 +4121,55 @@
             if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
           } catch (err) {
             console.error('Error adding ICE candidate', err);
+          }
+        });
+
+        socket.on('webrtc-screen-offer', async ({ sdp }) => {
+          try {
+            if (screenSharePeerConnection) {
+              try { screenSharePeerConnection.close(); } catch (_) {}
+            }
+            screenSharePeerConnection = new RTCPeerConnection(rtcConfig);
+            screenSharePeerConnection.ontrack = (event) => {
+              if (facultyScreenVideo) {
+                if (event.streams && event.streams[0]) {
+                  facultyScreenVideo.srcObject = event.streams[0];
+                } else if (event.track) {
+                  const inbound = new MediaStream();
+                  inbound.addTrack(event.track);
+                  facultyScreenVideo.srcObject = inbound;
+                }
+                const p = facultyScreenVideo.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              }
+              setFacultyScreenShareLive(true);
+            };
+            screenSharePeerConnection.onicecandidate = (e) => {
+              if (e.candidate && socket) {
+                socket.emit('webrtc-screen-ice-candidate', { candidate: e.candidate, sessionId: currentSessionId || null });
+              }
+            };
+            screenSharePeerConnection.onconnectionstatechange = () => {
+              const st = screenSharePeerConnection ? screenSharePeerConnection.connectionState : '';
+              if (st === 'failed' || st === 'disconnected' || st === 'closed') {
+                stopFacultyScreenPlayback();
+              }
+            };
+            await screenSharePeerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            const answer = await screenSharePeerConnection.createAnswer();
+            await screenSharePeerConnection.setLocalDescription(answer);
+            socket.emit('webrtc-screen-answer', { sdp: answer, sessionId: currentSessionId || null });
+          } catch (err) {
+            console.error('Error handling screen-share offer', err);
+            stopFacultyScreenPlayback();
+          }
+        });
+
+        socket.on('webrtc-screen-ice-candidate', async ({ candidate }) => {
+          try {
+            if (screenSharePeerConnection) await screenSharePeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (err) {
+            console.error('Error adding screen-share ICE candidate', err);
           }
         });
       }

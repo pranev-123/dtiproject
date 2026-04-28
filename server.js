@@ -6354,7 +6354,7 @@ app.post('/api/student/behavior-alert', (req, res) => {
   const sessionId = String((req.body && req.body.sessionId) || '').trim();
   const type = String((req.body && req.body.type) || '').trim().toLowerCase();
   if (!sessionId) return res.status(400).json({ ok: false, message: 'Missing sessionId.' });
-  if (!['sleep_detected', 'headset_missing'].includes(type)) {
+  if (!['sleep_detected', 'headset_missing', 'talking_detected'].includes(type)) {
     return res.status(400).json({ ok: false, message: 'Unsupported behavior alert type.' });
   }
   const s = sessions[sessionId];
@@ -6373,13 +6373,18 @@ app.post('/api/student/behavior-alert', (req, res) => {
   s.behaviorAlertCooldownByKey[key] = now;
   if (!Array.isArray(s.behaviorAlerts)) s.behaviorAlerts = [];
   const atIso = new Date(now).toISOString();
-  const label = type === 'sleep_detected' ? 'Sleep detected' : 'Headset not detected';
+  const label = type === 'sleep_detected'
+    ? 'Sleep detected'
+    : type === 'talking_detected'
+      ? 'Talking detected'
+      : 'Headset not detected';
   let snapshotPath = null;
-  if (type === 'sleep_detected') {
+  if (type === 'sleep_detected' || type === 'talking_detected') {
     const parsedSnapshot = parseSnapshotDataUrl(req.body && req.body.snapshotDataUrl);
     if (parsedSnapshot) {
       try {
-        const fname = `sleep-${sessionId}-${registerNumber || 'unknown'}-${now}-${crypto.randomBytes(3).toString('hex')}.${parsedSnapshot.ext}`;
+        const prefix = type === 'talking_detected' ? 'talking' : 'sleep';
+        const fname = `${prefix}-${sessionId}-${registerNumber || 'unknown'}-${now}-${crypto.randomBytes(3).toString('hex')}.${parsedSnapshot.ext}`;
         snapshotPath = path.join(SLEEP_ALERT_DIR, fname);
         fs.writeFileSync(snapshotPath, parsedSnapshot.buf);
       } catch (_) {
@@ -9994,6 +9999,19 @@ io.on('connection', (socket) => {
 
   socket.on('webrtc-ice-candidate', (payload) => {
     socket.to(resolveTargetRoom(payload)).emit('webrtc-ice-candidate', payload);
+  });
+
+  // Faculty screen-share WebRTC signaling (separate channel from student camera stream).
+  socket.on('webrtc-screen-offer', (payload) => {
+    socket.to(resolveTargetRoom(payload)).emit('webrtc-screen-offer', payload);
+  });
+
+  socket.on('webrtc-screen-answer', (payload) => {
+    socket.to(resolveTargetRoom(payload)).emit('webrtc-screen-answer', payload);
+  });
+
+  socket.on('webrtc-screen-ice-candidate', (payload) => {
+    socket.to(resolveTargetRoom(payload)).emit('webrtc-screen-ice-candidate', payload);
   });
 
   // Faculty broadcasts active session so students can send attention to it (no auth required on student)

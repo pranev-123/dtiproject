@@ -1585,6 +1585,18 @@
             <p class="hint" id="sessionRecordingStatus" style="margin-top:8px;font-size:12px;color:#5c5878;"></p>
           </div>
 
+          <div class="student-stream-controls" style="margin-top:14px;" aria-label="Screen sharing">
+            <div class="student-stream-controls-title">Screen sharing</div>
+            <p class="hint" style="margin:6px 0 8px;font-size:12px;">
+              Share Entire Screen, Window, or Chrome Tab from the picker. Enable system/tab audio there if needed.
+            </p>
+            <div class="student-stream-controls-row" style="gap:8px;flex-wrap:wrap;">
+              <button type="button" class="primary" id="btnStartScreenShare"><span class="neon-text">Start screen share</span></button>
+              <button type="button" class="secondary" id="btnStopScreenShare" disabled>Stop screen share</button>
+            </div>
+            <p class="hint" id="screenShareStatus" style="margin-top:8px;font-size:12px;color:#5c5878;">Not sharing.</p>
+          </div>
+
           <div class="side-panel" style="margin-top: 18px;">
             <div class="side-section signature-card" id="facultySessionDetailsSection" data-innovation="sessions">
               <div class="side-title">Session details</div>
@@ -2092,6 +2104,9 @@
       const quizPollComposerStatus = document.getElementById('quizPollComposerStatus');
       const quizPollComposerCancel = document.getElementById('quizPollComposerCancel');
       const quizPollComposerSubmit = document.getElementById('quizPollComposerSubmit');
+      const btnStartScreenShare = document.getElementById('btnStartScreenShare');
+      const btnStopScreenShare = document.getElementById('btnStopScreenShare');
+      const screenShareStatus = document.getElementById('screenShareStatus');
       const promptsBox = document.getElementById('promptsBox');
       const alertModeToggle = document.getElementById('alertModeToggle');
       const sessionsList = document.getElementById('sessionsList');
@@ -3385,6 +3400,8 @@
 
       let socket = null;
       let peerConnection = null;
+      let screenSharePeerConnection = null;
+      let screenShareStream = null;
       let currentSessionId = null;
       let selectedStudentTrendReg = '';
       let lastAiInterventionRecommendationAt = 0;
@@ -5528,6 +5545,79 @@
         setLive(false);
       }
 
+      function setScreenShareStatus(text, ok) {
+        if (!screenShareStatus) return;
+        screenShareStatus.textContent = text;
+        screenShareStatus.style.color = ok === true ? '#1f9d55' : ok === false ? '#b91c1c' : '#5c5878';
+      }
+
+      function stopFacultyScreenShare() {
+        if (screenSharePeerConnection) {
+          try { screenSharePeerConnection.close(); } catch (_) {}
+          screenSharePeerConnection = null;
+        }
+        if (screenShareStream) {
+          try { screenShareStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+          screenShareStream = null;
+        }
+        if (btnStartScreenShare) btnStartScreenShare.disabled = false;
+        if (btnStopScreenShare) btnStopScreenShare.disabled = true;
+        setScreenShareStatus('Not sharing.');
+      }
+
+      function createScreenSharePeerConnection() {
+        screenSharePeerConnection = new RTCPeerConnection(rtcConfig);
+        if (screenShareStream) {
+          screenShareStream.getTracks().forEach((track) => {
+            screenSharePeerConnection.addTrack(track, screenShareStream);
+          });
+        }
+        screenSharePeerConnection.onicecandidate = (event) => {
+          if (event.candidate && socket) {
+            socket.emit('webrtc-screen-ice-candidate', { candidate: event.candidate, sessionId: currentSessionId || null });
+          }
+        };
+      }
+
+      async function startFacultyScreenShare() {
+        if (!currentSessionId) {
+          alert('Start a session first, then share your screen.');
+          return;
+        }
+        if (!socket) {
+          alert('Socket connection is not ready.');
+          return;
+        }
+        try {
+          if (screenSharePeerConnection) {
+            try { screenSharePeerConnection.close(); } catch (_) {}
+            screenSharePeerConnection = null;
+          }
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+          screenShareStream = stream;
+          const tracks = Array.isArray(stream.getVideoTracks()) ? stream.getVideoTracks() : [];
+          if (tracks[0]) {
+            tracks[0].addEventListener('ended', () => {
+              stopFacultyScreenShare();
+            }, { once: true });
+          }
+          createScreenSharePeerConnection();
+          const offer = await screenSharePeerConnection.createOffer();
+          await screenSharePeerConnection.setLocalDescription(offer);
+          socket.emit('webrtc-screen-offer', { sdp: offer, sessionId: currentSessionId || null });
+          if (btnStartScreenShare) btnStartScreenShare.disabled = true;
+          if (btnStopScreenShare) btnStopScreenShare.disabled = false;
+          setScreenShareStatus('Sharing in progress. Students can view your selected screen/tab/window.', true);
+        } catch (err) {
+          console.error('Error starting screen share', err);
+          stopFacultyScreenShare();
+          setScreenShareStatus('Screen sharing was not started.', false);
+        }
+      }
+
       function setupSocket() {
         socket = io({
           reconnection: true,
@@ -5572,6 +5662,26 @@
             }
           } catch (err) {
             console.error('Error adding ICE candidate', err);
+          }
+        });
+
+        socket.on('webrtc-screen-answer', async ({ sdp }) => {
+          try {
+            if (!screenSharePeerConnection) return;
+            await screenSharePeerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            setScreenShareStatus('Students are receiving shared screen.', true);
+          } catch (err) {
+            console.error('Error setting screen-share remote answer', err);
+            setScreenShareStatus('Screen share answer failed.', false);
+          }
+        });
+
+        socket.on('webrtc-screen-ice-candidate', async ({ candidate }) => {
+          try {
+            if (!screenSharePeerConnection) return;
+            await screenSharePeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (err) {
+            console.error('Error adding screen-share ICE candidate', err);
           }
         });
 
@@ -5791,6 +5901,7 @@
                   sessionMediaRecorder.stop();
                 } catch (_) {}
               }
+              stopFacultyScreenShare();
               currentSessionId = null;
               if (attendanceRefreshInterval) {
                 clearInterval(attendanceRefreshInterval);
@@ -5812,6 +5923,16 @@
       if (btnResumeSession) {
         btnResumeSession.addEventListener('click', function () {
           void resumeCurrentSessionFromDashboard();
+        });
+      }
+      if (btnStartScreenShare) {
+        btnStartScreenShare.addEventListener('click', function () {
+          void startFacultyScreenShare();
+        });
+      }
+      if (btnStopScreenShare) {
+        btnStopScreenShare.addEventListener('click', function () {
+          stopFacultyScreenShare();
         });
       }
 
