@@ -388,7 +388,8 @@
           btnVerifyOtp.disabled = false;
           return false;
         }
-        window.location.href = otpData.requirePasswordChange ? '/change-password' : '/';
+        // Faculty demo: do not force redirect to /change-password (change-password popup removed).
+        window.location.href = '/';
         return true;
       }
 
@@ -456,7 +457,8 @@
           });
           const data = await res.json();
           if (data.ok) {
-            window.location.href = data.requirePasswordChange ? '/change-password' : '/';
+            // Faculty demo: do not force redirect to /change-password.
+            window.location.href = '/';
           } else {
             errorText.textContent = data.message || 'Login failed.';
           }
