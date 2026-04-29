@@ -5794,7 +5794,49 @@ app.post('/api/leadership-register', async (req, res) => {
     });
   }
   if (users[facultyEmail]) {
-    return res.status(400).json({ ok: false, message: 'This email is already registered. Please sign in.' });
+    // Idempotent resend: user already exists, so resend a fresh leadership password email
+    // instead of blocking them with "already registered".
+    const leadershipCredsExistingOrFromReq = (() => {
+      const d = String(designationStr || users[facultyEmail].designation || '').trim();
+      const dep = String(departmentStr || users[facultyEmail].department || '').trim();
+      const sid = String(trimmedStaffId || users[facultyEmail].staffId || '').trim();
+      return getLeadershipCredentials(d, dep, sid);
+    })();
+
+    // Validate + compute again with requested designation so we know the correct roleLabel for the email.
+    const leadershipCreds = getLeadershipCredentials(designationStr, departmentStr, trimmedStaffId);
+    const roleLabel = (leadershipCreds && leadershipCreds.roleLabel) ? leadershipCreds.roleLabel : (leadershipCredsExistingOrFromReq && leadershipCredsExistingOrFromReq.roleLabel);
+    if (!roleLabel) {
+      return res.status(400).json({ ok: false, message: 'Invalid designation/department/staff ID combination for leadership login.' });
+    }
+
+    const existing = users[facultyEmail];
+    const initialPasswordExisting = getInitialPasswordForRole('leadership', { staffId: trimmedStaffId, mobile: mobileRaw });
+    if (!initialPasswordExisting) {
+      return res.status(400).json({ ok: false, message: 'Unable to create a new leadership password.' });
+    }
+    const hashedPasswordExisting = await bcrypt.hash(initialPasswordExisting, BCRYPT_ROUNDS);
+
+    existing.hashedPassword = hashedPasswordExisting;
+    existing.name = trimmedName;
+    existing.staffId = trimmedStaffId;
+    existing.department = departmentStr;
+    existing.designation = designationStr;
+    existing.mobileE164 = mobileE164 || undefined;
+    existing.emailVerified = true;
+    existing.firstLogin = true;
+    existing.failedAttempts = 0;
+    existing.accountLockedUntil = null;
+    existing.lastDevice = null;
+    existing.lastIP = null;
+
+    const emailLinksBase = revealLinksBaseUrl(req);
+    saveDatabase();
+    runBackgroundTask('Leadership registration resend email', async () => {
+      await sendLeadershipLoginEmail(facultyEmail, facultyEmail, initialPasswordExisting, roleLabel, emailLinksBase);
+    });
+
+    return res.json({ ok: true, message: 'Email already registered. A new leadership password has been resent. Check your email and sign in.' });
   }
 
   // Validate + compute leadership password pattern by designation.
@@ -5874,7 +5916,65 @@ app.post('/api/register', async (req, res) => {
     });
   }
   if (users[facultyEmail]) {
-    return res.status(400).json({ ok: false, message: 'This email is already registered. Please sign in.' });
+    // Idempotent resend: user already exists, so resend a fresh faculty credentials email
+    // instead of blocking them with "already registered".
+    const existing = users[facultyEmail];
+    const designationStrExisting = String(designation || existing.designation || '').trim();
+    const departmentStrExisting = String(department || existing.department || '').trim();
+
+    const initialPasswordResent = getInitialPasswordForRole('faculty', { staffId: trimmedStaffId, mobile: mobileRaw });
+    if (!initialPasswordResent) {
+      return res.status(400).json({ ok: false, message: 'Unable to create a new faculty password.' });
+    }
+    const hashedPasswordResent = await bcrypt.hash(initialPasswordResent, BCRYPT_ROUNDS);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
+    const tokenExpiry = Date.now() + VERIFICATION_TOKEN_EXPIRY_MS;
+    const verificationDisplayCode = verificationEmailDisplayCode(token);
+
+    existing.hashedPassword = hashedPasswordResent;
+    existing.name = String(name || existing.name || '').trim();
+    existing.staffId = trimmedStaffId;
+    existing.department = departmentStrExisting;
+    existing.designation = designationStrExisting;
+    existing.mobileE164 = mobileE164 || undefined;
+    // Keep current verification state (if already verified, don't block login again).
+    existing.emailVerified = !!existing.emailVerified;
+    existing.verificationTokenHash = tokenHash;
+    existing.verificationDisplayCode = verificationDisplayCode;
+    existing.tokenExpiry = tokenExpiry;
+    existing.firstLogin = true;
+    existing.failedAttempts = 0;
+    existing.accountLockedUntil = null;
+    existing.lastDevice = null;
+    existing.lastIP = null;
+
+    verificationTokens[tokenHash] = { type: 'faculty', email: facultyEmail };
+
+    const emailLinksBase = revealLinksBaseUrl(req);
+    const verifyUrlForMail = `${emailLinksBase}/verify-email?token=${encodeURIComponent(token)}`;
+
+    const leadershipCreds = getLeadershipCredentials(designationStrExisting, departmentStrExisting, trimmedStaffId);
+
+    saveDatabase();
+    runBackgroundTask('Faculty registration resend emails', async () => {
+      await sendVerificationEmail(facultyEmail, facultyEmail, initialPasswordResent, token, 'faculty', emailLinksBase, clientIpFromReq(req));
+      await sendLoginEmail(facultyEmail, facultyEmail, initialPasswordResent, 'faculty', emailLinksBase, {
+        verifyUrl: verifyUrlForMail,
+      });
+      if (leadershipCreds) {
+        await sendLeadershipLoginEmail(
+          facultyEmail,
+          facultyEmail,
+          initialPasswordResent,
+          leadershipCreds.roleLabel,
+          emailLinksBase,
+        );
+      }
+    });
+
+    return res.json({ ok: true, message: 'Email already registered. A new faculty password has been resent. Check your email and sign in.' });
   }
 
   // Module 1: Strong encryption — password hashed with bcrypt; token stored as SHA-256 hash only
