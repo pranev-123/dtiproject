@@ -311,30 +311,7 @@
           <div class="register-cta-row">
             <a href="/register" class="register-cta"><span class="neon-text">Register — new faculty account</span></a>
           </div>
-          <div id="otpStep" style="display:none; margin-top: 8px;">
-            <div class="field" style="margin-bottom: 10px;">
-              <label for="otpInput">Enter OTP sent to your email</label>
-              <input
-                type="text"
-                id="otpInput"
-                name="otp"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                maxlength="6"
-                placeholder="6-digit OTP"
-                autocomplete="one-time-code"
-              />
-            </div>
-            <div class="login-actions" style="margin-top: 0;">
-              <button class="primary" type="button" id="btnVerifyOtp">
-                <span class="neon-text">Verify OTP</span>
-              </button>
-              <button class="secondary" type="button" id="btnResendOtp">
-                <span class="neon-text">Resend OTP</span>
-              </button>
-            </div>
-            <div class="hint-small" id="otpHint" style="min-height: 14px; text-align:left;"></div>
-          </div>
+          <!-- OTP step removed: login is password-only -->
           <p class="hint-small" style="margin-top:6px;">
             <button type="button" class="forgot-btn" id="btnForgotPassword"><span class="neon-text">Forgot password?</span></button>
           </p>
@@ -358,7 +335,7 @@
             if (n) {
               n.style.display = 'block';
               n.textContent =
-                'Verify your email using the link we sent you, then sign in with your password and complete OTP.';
+                'Sign in with your password.';
             }
           }
         } catch (e) {}
@@ -477,14 +454,7 @@
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          if (data.ok && data.otpRequired) {
-            activeOtpChallengeId = data.challengeId;
-            setOtpStepVisible(true);
-            if (otpHint) {
-              otpHint.textContent = data.message || 'OTP has been sent to your email. Enter the 6-digit OTP.';
-              if (data.debugOtp) otpHint.textContent += ` (Dev OTP: ${data.debugOtp})`;
-            }
-          } else if (data.ok) {
+          if (data.ok) {
             window.location.href = data.requirePasswordChange ? '/change-password' : '/';
           } else {
             errorText.textContent = data.message || 'Login failed.';

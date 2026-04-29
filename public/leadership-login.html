@@ -272,30 +272,7 @@
             maxlength="32"
           />
         </div>
-        <div id="otpStep" style="display:none; margin-top: 8px;">
-          <div class="leadership-login-field" style="margin-bottom: 10px;">
-            <label for="otpInput">Enter OTP sent to your email</label>
-            <input
-              type="text"
-              id="otpInput"
-              name="otp"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              maxlength="6"
-              placeholder="6-digit OTP"
-              autocomplete="one-time-code"
-            />
-          </div>
-          <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 0;">
-            <button class="leadership-login-primary" type="button" id="btnVerifyOtp" style="width:auto; padding: 9px 16px; letter-spacing: 0.06em;">
-              <span class="neon-text">Verify OTP</span>
-            </button>
-            <button class="leadership-register-btn" type="button" id="btnResendOtp" style="width:auto; margin-top:0;">
-              <span class="neon-text">Resend OTP</span>
-            </button>
-          </div>
-          <div class="leadership-login-error" id="otpHint" style="min-height: 18px; margin-top: 6px; color:#413563;"></div>
-        </div>
+        <!-- OTP step removed: login is password-only -->
         <button type="submit" class="leadership-login-primary">
           <span class="neon-text">Sign in</span>
         </button>
@@ -316,7 +293,7 @@
             if (n) {
               n.style.display = 'block';
               n.textContent =
-                'Verify your faculty email using the link we sent at registration, then use Leadership login with OTP.';
+                'Sign in with your password.';
             }
           }
         } catch (e) {}
@@ -437,15 +414,6 @@
             const data = await res.json();
             if (!data.ok) {
               errorEl.textContent = data.message || 'Login failed.';
-              return;
-            }
-            if (data.otpRequired) {
-              activeOtpChallengeId = data.challengeId;
-              setOtpStepVisible(true);
-              if (otpHint) {
-                otpHint.textContent = data.message || 'OTP has been sent to your email. Enter the 6-digit OTP.';
-                if (data.debugOtp) otpHint.textContent += ` (Dev OTP: ${data.debugOtp})`;
-              }
               return;
             }
             window.location.href = '/leadership';

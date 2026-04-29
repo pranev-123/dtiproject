@@ -304,30 +304,7 @@
           <div class="login-actions">
             <button class="primary" type="submit" id="btnLogin"><span class="neon-text">Sign in</span></button>
           </div>
-          <div id="otpStep" style="display:none; margin-top: 8px;">
-            <div class="field" style="margin-bottom: 10px;">
-              <label for="otpInput">Enter OTP sent to your email</label>
-              <input
-                type="text"
-                id="otpInput"
-                name="otp"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                maxlength="6"
-                placeholder="6-digit OTP"
-                autocomplete="one-time-code"
-              />
-            </div>
-            <div class="login-actions" style="margin-top: 0;">
-              <button class="primary" type="button" id="btnVerifyOtp">
-                <span class="neon-text">Verify OTP</span>
-              </button>
-              <button class="secondary-btn" type="button" id="btnResendOtp">
-                <span class="neon-text">Resend OTP</span>
-              </button>
-            </div>
-            <div class="hint-small" id="otpHint" style="min-height: 14px; text-align:left;"></div>
-          </div>
+          <!-- OTP step removed: login is password-only -->
           <p class="hint-small" style="margin-top:6px;">
             <button type="button" class="forgot-btn" id="btnForgotPassword"><span class="neon-text">Forgot password?</span></button>
           </p>
@@ -351,7 +328,7 @@
             if (n) {
               n.style.display = 'block';
               n.textContent =
-                'Verify your email using the link we sent you, then sign in with your password from the encrypted credentials email.';
+                'Sign in with your password.';
             }
           }
         } catch (e) {}
@@ -486,15 +463,7 @@
             body: JSON.stringify({ email, password }),
           });
           const data = await res.json();
-          if (data.ok && data.otpRequired) {
-            activeOtpChallengeId = data.challengeId;
-            setOtpStepVisible(true);
-            if (otpHint) {
-              otpHint.textContent = data.message || 'OTP has been sent to your email. Enter the 6-digit OTP.';
-              if (data.debugOtp) otpHint.textContent += ` (Dev OTP: ${data.debugOtp})`;
-            }
-            return;
-          } else if (data.ok) {
+          if (data.ok) {
             window.location.href = '/student';
           } else {
             errorText.textContent = data.message || 'Login failed.';
@@ -503,10 +472,7 @@
           console.error(err);
           errorText.textContent = 'Unable to reach server. Please try again.';
         } finally {
-          // If OTP is required, keep the step visible; OTP verification will redirect.
-          if (!(activeOtpChallengeId && otpStep && otpStep.style.display !== 'none')) {
-            btnLogin.disabled = false;
-          }
+          btnLogin.disabled = false;
         }
       });
 

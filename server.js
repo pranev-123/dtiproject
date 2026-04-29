@@ -2650,10 +2650,6 @@ function ensureAuthenticated(req, res, next) {
     }
     const email = String(req.session.userEmail).trim().toLowerCase();
     const u = users[email];
-    if (u && u.hashedPassword && !u.emailVerified) {
-      req.session.destroy(() => res.redirect('/_login?notice=verify-email'));
-      return;
-    }
     return next();
   }
   return res.redirect('/login');
@@ -2755,10 +2751,6 @@ function ensureStudentAuthenticated(req, res, next) {
     }
     const resolved = resolveStudentRecordFromSession(req);
     const rec = resolved && resolved.rec;
-    if (rec && rec.hashedPassword && !rec.emailVerified) {
-      req.session.destroy(() => res.redirect('/_student-login?notice=verify-email'));
-      return;
-    }
     return next();
   }
   return res.redirect('/student/login');
@@ -2775,10 +2767,6 @@ function ensureLeadership(req, res, next) {
   }
   const email = String(req.session.userEmail).trim().toLowerCase();
   const u = users[email];
-  if (u && u.hashedPassword && !u.emailVerified) {
-    req.session.destroy(() => res.redirect('/_leadership-login?notice=verify-email'));
-    return;
-  }
   return next();
 }
 
@@ -4014,11 +4002,6 @@ app.post('/api/student-login', async (req, res) => {
   if (registered.accountLockedUntil && now < registered.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
-  // Module 1: Require email verification for new secure accounts
-  if (registered.hashedPassword && !registered.emailVerified) {
-    return res.status(403).json({ ok: false, message: 'Please verify your email using the link sent to you before signing in.' });
-  }
-
   let valid = false;
   if (registered.hashedPassword) {
     valid = await bcrypt.compare(pwd, registered.hashedPassword);
@@ -4049,21 +4032,25 @@ app.post('/api/student-login', async (req, res) => {
   registered.lastDevice = device;
   registered.lastIP = ip;
 
-  const otpChallenge = await issueLoginOtpChallenge(
-    'student',
-    registered.email || trimmedEmail,
-    {
-      studentEmail: trimmedEmail,
-      studentId: registered.registerNumber,
-    },
-    {
-      requirePasswordChange: !!registered.firstLogin,
-    },
-  );
-  if (!otpChallenge.ok) {
-    return res.status(otpChallenge.status || 500).json({ ok: false, message: otpChallenge.message || 'Unable to start OTP login.' });
+  // Password-only login: no email verification / no OTP required.
+  req.session.studentEmail = trimmedEmail;
+  req.session.studentId = String(registered.registerNumber || '').trim();
+  req.session.mfaVerified = true;
+  req.session.mfaRole = 'student';
+  req.session.mfaAt = new Date().toISOString();
+
+  if (registered) {
+    if (registered.sessionVersion == null) registered.sessionVersion = 0;
+    req.session.accountSessionVersion = Number(registered.sessionVersion || 0);
+    enableAiAgentAfterSignIn(registered, 'student');
+    appendDeviceLoginSession(registered, 'student', req);
+    saveDatabase();
   }
-  return res.json(otpChallenge);
+
+  return res.json({
+    ok: true,
+    requirePasswordChange: !!registered.firstLogin,
+  });
 });
 
 app.post('/api/student-login/google', async (req, res) => {
@@ -4085,9 +4072,6 @@ app.post('/api/student-login/google', async (req, res) => {
   if (!registered) {
     return res.status(403).json({ ok: false, message: 'Not registered. Please register first.' });
   }
-  if (registered.hashedPassword && !registered.emailVerified) {
-    return res.status(403).json({ ok: false, message: 'Please verify your email using the link sent to you before signing in.' });
-  }
   const device = req.headers['user-agent'] || 'Unknown';
   const ip = req.ip || req.connection?.remoteAddress || 'Unknown';
   if (registered.lastDevice !== undefined && (registered.lastDevice !== device || registered.lastIP !== ip)) {
@@ -4098,21 +4082,25 @@ app.post('/api/student-login/google', async (req, res) => {
   registered.accountLockedUntil = null;
   registered.lastDevice = device;
   registered.lastIP = ip;
-  const otpChallenge = await issueLoginOtpChallenge(
-    'student',
-    registered.email || emailLower,
-    {
-      studentEmail: emailLower,
-      studentId: registered.registerNumber,
-    },
-    {
-      requirePasswordChange: !!registered.firstLogin,
-    },
-  );
-  if (!otpChallenge.ok) {
-    return res.status(otpChallenge.status || 500).json({ ok: false, message: otpChallenge.message || 'Unable to start OTP login.' });
+  // Password-only login: no email verification / no OTP required.
+  req.session.studentEmail = emailLower;
+  req.session.studentId = String(registered.registerNumber || '').trim();
+  req.session.mfaVerified = true;
+  req.session.mfaRole = 'student';
+  req.session.mfaAt = new Date().toISOString();
+
+  if (registered) {
+    if (registered.sessionVersion == null) registered.sessionVersion = 0;
+    req.session.accountSessionVersion = Number(registered.sessionVersion || 0);
+    enableAiAgentAfterSignIn(registered, 'student');
+    appendDeviceLoginSession(registered, 'student', req);
+    saveDatabase();
   }
-  return res.json(otpChallenge);
+
+  return res.json({
+    ok: true,
+    requirePasswordChange: !!registered.firstLogin,
+  });
 });
 
 app.post('/api/student-login/verify-otp', async (req, res) => {
@@ -4126,12 +4114,6 @@ app.post('/api/student-login/verify-otp', async (req, res) => {
     findStudentRegistrationByLoginEmail(studentEmail) ||
     (studentId ? studentRegistrations[studentId + STUDENT_EMAIL_SUFFIX] : null) ||
     null;
-  if (studentRec && studentRec.hashedPassword && !studentRec.emailVerified) {
-    return res.status(403).json({
-      ok: false,
-      message: 'Please verify your email using the link sent to you before completing sign-in.',
-    });
-  }
   req.session.studentEmail = studentEmail;
   const fallbackStudentId = studentRec && studentRec.registerNumber ? String(studentRec.registerNumber).trim() : '';
   req.session.studentId = studentId || fallbackStudentId;
@@ -5651,12 +5633,6 @@ app.post('/api/leadership-login', async (req, res) => {
   if (!user) {
     return res.status(403).json({ ok: false, message: 'Account not found. Please contact administrator.' });
   }
-  if (user.hashedPassword && !user.emailVerified) {
-    return res.status(403).json({
-      ok: false,
-      message: 'Please verify your email using the link sent at faculty registration before using Leadership login.',
-    });
-  }
 
   const designationRaw = String(user.designation || '').trim();
   const designation = designationRaw.toLowerCase();
@@ -5680,23 +5656,25 @@ app.post('/api/leadership-login', async (req, res) => {
     return res.status(401).json({ ok: false, message: 'Invalid credentials.' });
   }
 
-  return issueLoginOtpChallenge(
-    'leadership',
-    trimmedEmail,
-    {
-      userEmail: trimmedEmail,
-      leadership: true,
-      leadershipRoleLabel: roleLabel,
-      leadershipEffectiveDesignation: designation,
-      leadershipEffectiveDeptCode: deptCode,
-    },
-    { roleLabel },
-  ).then((otpChallenge) => {
-    if (!otpChallenge.ok) {
-      return res.status(otpChallenge.status || 500).json({ ok: false, message: otpChallenge.message || 'Unable to start OTP login.' });
-    }
-    return res.json(otpChallenge);
-  });
+  // Password-only login: no email verification / no OTP required.
+  req.session.userEmail = trimmedEmail;
+  req.session.leadership = true;
+  req.session.mfaVerified = true;
+  req.session.mfaRole = 'leadership';
+  req.session.mfaAt = new Date().toISOString();
+  req.session.leadershipRoleLabel = String(roleLabel || 'Leadership');
+  req.session.leadershipEffectiveDesignation = String(designation || '').trim().toLowerCase();
+  req.session.leadershipEffectiveDeptCode = String(deptCode || '').trim().toLowerCase();
+
+  if (user) {
+    if (user.sessionVersion == null) user.sessionVersion = 0;
+    req.session.accountSessionVersion = Number(user.sessionVersion || 0);
+    enableAiAgentAfterSignIn(user, 'leadership');
+    appendDeviceLoginSession(user, 'leadership', req);
+    saveDatabase();
+  }
+
+  return res.json({ ok: true, roleLabel: String(roleLabel || 'Leadership') });
 });
 
 app.post('/api/leadership-login/verify-otp', (req, res) => {
@@ -5706,12 +5684,6 @@ app.post('/api/leadership-login/verify-otp', (req, res) => {
   const data = result.entry;
   const leadershipEmail = String(data.sessionData.userEmail || '').trim().toLowerCase();
   const user = users[leadershipEmail];
-  if (user && user.hashedPassword && !user.emailVerified) {
-    return res.status(403).json({
-      ok: false,
-      message: 'Please verify your email using the link sent at registration before completing sign-in.',
-    });
-  }
   req.session.userEmail = leadershipEmail;
   req.session.leadership = true;
   req.session.mfaVerified = true;
@@ -6064,11 +6036,6 @@ app.post('/api/login', async (req, res) => {
   if (existing.accountLockedUntil && now < existing.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
-  // Module 1: Require email verification for new secure accounts
-  if (existing.hashedPassword && !existing.emailVerified) {
-    return res.status(403).json({ ok: false, message: 'Please verify your email using the link sent to you before signing in.' });
-  }
-
   let valid = false;
   if (existing.hashedPassword) {
     valid = await bcrypt.compare(password, existing.hashedPassword);
@@ -6094,16 +6061,24 @@ app.post('/api/login', async (req, res) => {
   existing.lastDevice = device;
   existing.lastIP = ip;
 
-  const otpChallenge = await issueLoginOtpChallenge(
-    'faculty',
-    trimmedEmail,
-    { userEmail: trimmedEmail },
-    { requirePasswordChange: !!existing.firstLogin },
-  );
-  if (!otpChallenge.ok) {
-    return res.status(otpChallenge.status || 500).json({ ok: false, message: otpChallenge.message || 'Unable to start OTP login.' });
+  // Password-only login: no email verification / no OTP required.
+  req.session.userEmail = trimmedEmail;
+  req.session.mfaVerified = true;
+  req.session.mfaRole = 'faculty';
+  req.session.mfaAt = new Date().toISOString();
+
+  if (existing) {
+    if (existing.sessionVersion == null) existing.sessionVersion = 0;
+    req.session.accountSessionVersion = Number(existing.sessionVersion || 0);
+    enableAiAgentAfterSignIn(existing, 'faculty');
+    appendDeviceLoginSession(existing, 'faculty', req);
+    saveDatabase();
   }
-  return res.json(otpChallenge);
+
+  return res.json({
+    ok: true,
+    requirePasswordChange: !!existing.firstLogin,
+  });
 });
 
 app.post('/api/login/google', async (req, res) => {
@@ -6128,9 +6103,6 @@ app.post('/api/login/google', async (req, res) => {
   if (!existing) {
     return res.status(403).json({ ok: false, message: 'Not registered. Please register first.' });
   }
-  if (existing.hashedPassword && !existing.emailVerified) {
-    return res.status(403).json({ ok: false, message: 'Please verify your email using the link sent to you before signing in.' });
-  }
   const now = Date.now();
   clearExpiredAccountLockout(existing, now);
   if (existing.accountLockedUntil && now < existing.accountLockedUntil) {
@@ -6145,16 +6117,23 @@ app.post('/api/login/google', async (req, res) => {
   existing.accountLockedUntil = null;
   existing.lastDevice = device;
   existing.lastIP = ip;
-  const otpChallenge = await issueLoginOtpChallenge(
-    'faculty',
-    trimmedEmail,
-    { userEmail: trimmedEmail },
-    { requirePasswordChange: !!existing.firstLogin },
-  );
-  if (!otpChallenge.ok) {
-    return res.status(otpChallenge.status || 500).json({ ok: false, message: otpChallenge.message || 'Unable to start OTP login.' });
+  // Password-only login: no email verification / no OTP required.
+  req.session.userEmail = trimmedEmail;
+  req.session.mfaVerified = true;
+  req.session.mfaRole = 'faculty';
+  req.session.mfaAt = new Date().toISOString();
+  if (existing) {
+    if (existing.sessionVersion == null) existing.sessionVersion = 0;
+    req.session.accountSessionVersion = Number(existing.sessionVersion || 0);
+    enableAiAgentAfterSignIn(existing, 'faculty');
+    appendDeviceLoginSession(existing, 'faculty', req);
+    saveDatabase();
   }
-  return res.json(otpChallenge);
+
+  return res.json({
+    ok: true,
+    requirePasswordChange: !!existing.firstLogin,
+  });
 });
 
 app.post('/api/login/verify-otp', async (req, res) => {
@@ -6164,12 +6143,6 @@ app.post('/api/login/verify-otp', async (req, res) => {
   const data = result.entry;
   const facultyEmail = String(data.sessionData.userEmail || '').trim().toLowerCase();
   const user = users[facultyEmail];
-  if (user && user.hashedPassword && !user.emailVerified) {
-    return res.status(403).json({
-      ok: false,
-      message: 'Please verify your email using the link sent to you before completing sign-in.',
-    });
-  }
   req.session.userEmail = facultyEmail;
   req.session.mfaVerified = true;
   req.session.mfaRole = 'faculty';
