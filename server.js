@@ -771,17 +771,42 @@ const cameraSources = {
 };
 
 // Mailer: sends username + password via Gmail (or other SMTP) for faculty and student registration
-const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
-const isGmail = (process.env.SMTP_HOST || 'smtp.gmail.com').toLowerCase().includes('gmail');
+function normalizeEnvString(v) {
+  const raw = String(v == null ? '' : v).trim();
+  if (!raw) return '';
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    return raw.slice(1, -1).trim();
+  }
+  return raw;
+}
+const SMTP_USER = normalizeEnvString(process.env.SMTP_USER);
+const SMTP_PASS = normalizeEnvString(process.env.SMTP_PASS);
+const SMTP_HOST = normalizeEnvString(process.env.SMTP_HOST) || 'smtp.gmail.com';
+const SMTP_PORT = Number(normalizeEnvString(process.env.SMTP_PORT) || 587);
+const smtpSecureOverride = normalizeEnvString(process.env.SMTP_SECURE);
+const SMTP_SECURE = smtpSecureOverride
+  ? smtpSecureOverride.toLowerCase() === 'true'
+  : SMTP_PORT === 465;
+const FROM_EMAIL = normalizeEnvString(process.env.FROM_EMAIL) || SMTP_USER;
+process.env.SMTP_USER = SMTP_USER;
+process.env.SMTP_PASS = SMTP_PASS;
+process.env.SMTP_HOST = SMTP_HOST;
+process.env.SMTP_PORT = String(SMTP_PORT);
+if (FROM_EMAIL) process.env.FROM_EMAIL = FROM_EMAIL;
+const smtpConfigured = !!(SMTP_USER && SMTP_PASS);
+const isGmail = SMTP_HOST.toLowerCase().includes('gmail');
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_SECURE,
   requireTLS: isGmail,
   auth: smtpConfigured
     ? {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       }
     : undefined,
 });
@@ -6838,17 +6863,21 @@ async function notifyStudentsQuizOrPollByEmail(activity, sessionObj) {
   const optionsText = opts.length ? `\nOptions:\n${opts.map((x, i) => `${i + 1}. ${x}`).join('\n')}` : '';
   const text = `Hello Student,\n\nA new ${kind} was posted in your class session.\n\nTopic: ${sessionObj && sessionObj.topic ? sessionObj.topic : '-'}\nVenue: ${sessionObj && sessionObj.venue ? sessionObj.venue : '-'}\nQuestion: ${activity && activity.question ? activity.question : '-'}${optionsText}\n\nOpen Student dashboard to respond immediately.\n\n${COLLEGE_FOOTER_TEXT}`;
   const html = `<div style="font-family:Arial,sans-serif;line-height:1.55;color:#24135f"><h3 style="margin:0 0 10px;">New ${kind} posted</h3><p style="margin:0 0 8px;"><b>Topic:</b> ${escapeHtml(sessionObj && sessionObj.topic ? sessionObj.topic : '-')}</p><p style="margin:0 0 8px;"><b>Venue:</b> ${escapeHtml(sessionObj && sessionObj.venue ? sessionObj.venue : '-')}</p><p style="margin:0 0 8px;"><b>Question:</b> ${escapeHtml(activity && activity.question ? activity.question : '-')}</p>${opts.length ? `<p style="margin:0 0 6px;"><b>Options:</b></p><ol style="margin:0 0 10px 20px;">${opts.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ol>` : ''}<p style="margin:10px 0;">Open the Student dashboard to respond immediately.</p><div style="margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;gap:10px;align-items:flex-start;">${hasFooterLogo ? '<img src="cid:rec-footer-logo" alt="REC logo" style="width:46px;height:46px;object-fit:contain;border-radius:6px;" />' : ''}<p style="margin:0;font-size:12px;color:#6b7280;">${escapeHtml(COLLEGE_FOOTER_TEXT).replace(/\n/g, '<br>')}</p></div></div>`;
-  const mailOptions = {
-    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-    bcc: recipients.join(','),
-    subject: `REC Classroom ${kind}: ${activity && activity.question ? String(activity.question).slice(0, 70) : 'New activity'}`,
-    text,
-    html,
-  };
-  if (hasFooterLogo) {
-    mailOptions.attachments = [{ filename: 'rec-logo.jpg', content: fs.readFileSync(footerLogoPath), cid: 'rec-footer-logo' }];
+  const recipientBatchSize = Math.max(10, Math.min(80, Number(process.env.SMTP_BCC_BATCH_SIZE) || 50));
+  for (let i = 0; i < recipients.length; i += recipientBatchSize) {
+    const batch = recipients.slice(i, i + recipientBatchSize);
+    const mailOptions = {
+      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+      bcc: batch.join(','),
+      subject: `REC Classroom ${kind}: ${activity && activity.question ? String(activity.question).slice(0, 70) : 'New activity'}`,
+      text,
+      html,
+    };
+    if (hasFooterLogo) {
+      mailOptions.attachments = [{ filename: 'rec-logo.jpg', content: fs.readFileSync(footerLogoPath), cid: 'rec-footer-logo' }];
+    }
+    await transporter.sendMail(mailOptions);
   }
-  await transporter.sendMail(mailOptions);
 }
 
 app.post('/api/session/:id/classroom-activity', ensureAuthenticated, (req, res) => {
@@ -9812,9 +9841,37 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
           content: Buffer.from(thresholdCsv, 'utf8'),
         });
       }
-      await transporter.sendMail(mailOptions);
-      emailSent = true;
-      console.log('Session report email sent to', s.ownerEmail);
+      try {
+        await transporter.sendMail(mailOptions);
+        emailSent = true;
+        console.log('Session report email sent to', s.ownerEmail);
+      } catch (fullErr) {
+        // Fallback: retry with lighter payload if provider rejects size/content.
+        console.error('Full report email failed, retrying with compact payload:', fullErr && fullErr.message ? fullErr.message : fullErr);
+        const compact = {
+          from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+          to: s.ownerEmail,
+          subject: `Classroom Attention Report - ${summary.topic} (compact)`,
+          text: emailText + '\n\nNote: Sent in compact mode to improve delivery reliability.',
+          attachments: [],
+        };
+        if (pdfBuffer) {
+          compact.attachments.push({
+            filename: `attention-report-${summary.topic.replace(/\s+/g, '-')}.pdf`,
+            content: pdfBuffer,
+          });
+        }
+        if (rankingPdfBuffer) {
+          compact.attachments.push({
+            filename: `student-ranking-last60s-${summary.topic.replace(/\s+/g, '-')}.pdf`,
+            content: rankingPdfBuffer,
+          });
+        }
+        if (compact.attachments.length === 0) delete compact.attachments;
+        await transporter.sendMail(compact);
+        emailSent = true;
+        console.log('Session report compact email sent to', s.ownerEmail);
+      }
     } else {
       console.log('Email skipped: SMTP not configured. Set SMTP_USER and SMTP_PASS (and optionally SMTP_HOST, SMTP_PORT) in environment.');
       emailError = 'SMTP not configured';
