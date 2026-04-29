@@ -1969,11 +1969,14 @@ function parseSendLoginEmailOptions(sixth) {
 
 // Fire-and-forget helper so HTTP responses are not blocked by SMTP latency.
 function runBackgroundTask(taskLabel, task) {
-  Promise.resolve()
-    .then(task)
-    .catch((err) => {
-      console.error(`${taskLabel} failed:`, err);
-    });
+  // Schedule on next tick so the current HTTP response can finish first.
+  setImmediate(() => {
+    Promise.resolve()
+      .then(task)
+      .catch((err) => {
+        console.error(`${taskLabel} failed:`, err);
+      });
+  });
 }
 
 app.use(express.json());
@@ -4029,7 +4032,9 @@ app.post('/api/student-login', async (req, res) => {
   const ip = req.ip || req.connection?.remoteAddress || 'Unknown';
   if (registered.lastDevice !== undefined && (registered.lastDevice !== device || registered.lastIP !== ip)) {
     const sendTo = registered.email || trimmedEmail;
-    await sendSecurityAlertEmail(sendTo, device, ip);
+    runBackgroundTask('Security alert email', async () => {
+      await sendSecurityAlertEmail(sendTo, device, ip);
+    });
   }
   registered.failedAttempts = 0;
   registered.accountLockedUntil = null;
@@ -4048,7 +4053,9 @@ app.post('/api/student-login', async (req, res) => {
     req.session.accountSessionVersion = Number(registered.sessionVersion || 0);
     enableAiAgentAfterSignIn(registered, 'student');
     appendDeviceLoginSession(registered, 'student', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after student login', async () => {
+      saveDatabase();
+    });
   }
 
   return res.json({
@@ -4080,7 +4087,9 @@ app.post('/api/student-login/google', async (req, res) => {
   const ip = req.ip || req.connection?.remoteAddress || 'Unknown';
   if (registered.lastDevice !== undefined && (registered.lastDevice !== device || registered.lastIP !== ip)) {
     const sendTo = registered.email || emailLower;
-    await sendSecurityAlertEmail(sendTo, device, ip);
+    runBackgroundTask('Security alert email', async () => {
+      await sendSecurityAlertEmail(sendTo, device, ip);
+    });
   }
   registered.failedAttempts = 0;
   registered.accountLockedUntil = null;
@@ -4098,7 +4107,9 @@ app.post('/api/student-login/google', async (req, res) => {
     req.session.accountSessionVersion = Number(registered.sessionVersion || 0);
     enableAiAgentAfterSignIn(registered, 'student');
     appendDeviceLoginSession(registered, 'student', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after student login', async () => {
+      saveDatabase();
+    });
   }
 
   return res.json({
@@ -4129,7 +4140,9 @@ app.post('/api/student-login/verify-otp', async (req, res) => {
     req.session.accountSessionVersion = Number(studentRec.sessionVersion || 0);
     enableAiAgentAfterSignIn(studentRec, 'student');
     appendDeviceLoginSession(studentRec, 'student', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after student login', async () => {
+      saveDatabase();
+    });
   }
   return res.json({
     ok: true,
@@ -5678,7 +5691,9 @@ app.post('/api/leadership-login', async (req, res) => {
     req.session.accountSessionVersion = Number(user.sessionVersion || 0);
     enableAiAgentAfterSignIn(user, 'leadership');
     appendDeviceLoginSession(user, 'leadership', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after leadership login', async () => {
+      saveDatabase();
+    });
   }
 
   return res.json({ ok: true, roleLabel: String(roleLabel || 'Leadership') });
@@ -5704,7 +5719,9 @@ app.post('/api/leadership-login/verify-otp', (req, res) => {
     req.session.accountSessionVersion = Number(user.sessionVersion || 0);
     enableAiAgentAfterSignIn(user, 'leadership');
     appendDeviceLoginSession(user, 'leadership', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after leadership login', async () => {
+      saveDatabase();
+    });
   }
   return res.json({
     ok: true,
@@ -6064,7 +6081,9 @@ app.post('/api/login', async (req, res) => {
   const device = req.headers['user-agent'] || 'Unknown';
   const ip = req.ip || req.connection?.remoteAddress || 'Unknown';
   if (existing.lastDevice !== undefined && (existing.lastDevice !== device || existing.lastIP !== ip)) {
-    await sendSecurityAlertEmail(trimmedEmail, device, ip);
+    runBackgroundTask('Security alert email', async () => {
+      await sendSecurityAlertEmail(trimmedEmail, device, ip);
+    });
   }
   existing.failedAttempts = 0;
   existing.accountLockedUntil = null;
@@ -6082,7 +6101,9 @@ app.post('/api/login', async (req, res) => {
     req.session.accountSessionVersion = Number(existing.sessionVersion || 0);
     enableAiAgentAfterSignIn(existing, 'faculty');
     appendDeviceLoginSession(existing, 'faculty', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after faculty login', async () => {
+      saveDatabase();
+    });
   }
 
   return res.json({
@@ -6121,7 +6142,9 @@ app.post('/api/login/google', async (req, res) => {
   const device = req.headers['user-agent'] || 'Unknown';
   const ip = req.ip || req.connection?.remoteAddress || 'Unknown';
   if (existing.lastDevice !== undefined && (existing.lastDevice !== device || existing.lastIP !== ip)) {
-    await sendSecurityAlertEmail(trimmedEmail, device, ip);
+    runBackgroundTask('Security alert email', async () => {
+      await sendSecurityAlertEmail(trimmedEmail, device, ip);
+    });
   }
   existing.failedAttempts = 0;
   existing.accountLockedUntil = null;
@@ -6137,7 +6160,9 @@ app.post('/api/login/google', async (req, res) => {
     req.session.accountSessionVersion = Number(existing.sessionVersion || 0);
     enableAiAgentAfterSignIn(existing, 'faculty');
     appendDeviceLoginSession(existing, 'faculty', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after faculty login', async () => {
+      saveDatabase();
+    });
   }
 
   return res.json({
@@ -6162,7 +6187,9 @@ app.post('/api/login/verify-otp', async (req, res) => {
     req.session.accountSessionVersion = Number(user.sessionVersion || 0);
     enableAiAgentAfterSignIn(user, 'faculty');
     appendDeviceLoginSession(user, 'faculty', req);
-    saveDatabase();
+    runBackgroundTask('Persist DB after faculty login', async () => {
+      saveDatabase();
+    });
   }
   return res.json({
     ok: true,
