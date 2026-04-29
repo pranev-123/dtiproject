@@ -1518,9 +1518,6 @@
                   <button type="button" class="secondary profile-camera-btn" data-action="tilt-down">↓ Tilt Down</button>
                 </div>
               </div>
-              <button type="button" class="profile-menu-item" id="profileChangePasswordBtn">
-                Change password
-              </button>
               <button type="button" class="profile-menu-item" id="profileLogoutBtn">
                 Log out
               </button>
@@ -1937,43 +1934,10 @@
               <div class="side-title">Account &amp; history</div>
               <div class="side-body">
                 <div class="controls-row">
-                  <button class="secondary neon-account-btn" type="button" id="btnShowPassword" style="display:none;">
-                    Change password
-                  </button>
                   <button class="secondary neon-account-btn" type="button" id="btnLogout" style="display:none;">
                     Log out
                   </button>
                 </div>
-                <form id="passwordForm" style="display: none; margin-top: 10px;">
-                  <div class="field">
-                    <label for="currentPassword">Current password</label>
-                    <input type="password" id="currentPassword" />
-                  </div>
-                  <div class="field">
-                    <label for="newPassword">New password</label>
-                    <input type="password" id="newPassword" minlength="8" maxlength="128" />
-                  </div>
-                  <p class="hint" style="margin: 0 0 10px;">
-                    <strong>Too Many Requests, Rate limit exceeded</strong><br />
-                    <strong>Security Notice:</strong> Password reset attempts are limited to 5 requests per hour for security purposes.
-                  </p>
-                  <p class="hint" style="margin: 0 0 10px; line-height: 1.45;">
-                    <strong>Instructions</strong><br />
-                    - Password must be at least 8 and maximum 128 characters long<br />
-                    - At least one uppercase letter (A-Z)<br />
-                    - At least one lowercase letter (a-z)<br />
-                    - At least one digit (0-9)<br />
-                    - At least one special character (Eg: @, #, $, %, &, *, etc.)<br />
-                    - User's personal information are not permitted (Eg: username, email, first name, last name)<br />
-                    - Three or more consecutive characters which form a sequence are not permitted (Eg: Alphabetical sequence like ABC, STU; Keyboard sequences like ASD, UIO; Numerical sequences like 123, 789)
-                  </p>
-                  <div class="controls-row">
-                    <button class="primary" type="submit" id="btnSavePassword">
-                      Save password
-                    </button>
-                  </div>
-                </form>
-                <p class="hint" id="passwordMessage"></p>
 
                 <hr style="border: none; border-top: 1px solid rgba(36, 19, 95, 0.12); margin: 10px 0;" />
 
@@ -3077,13 +3041,6 @@
         document.addEventListener('click', (e) => {
           if (profileMenuBtn.contains(e.target)) return;
           if (profileDropdownMenu.contains(e.target)) return;
-          closeProfileDropdown();
-        });
-      }
-
-      if (profileChangePasswordBtn) {
-        profileChangePasswordBtn.addEventListener('click', () => {
-          if (btnShowPassword) btnShowPassword.click();
           closeProfileDropdown();
         });
       }
@@ -6414,48 +6371,6 @@
             handleSoftwareCamera(action);
           }
         });
-      });
-
-      // ---- Password + account ----
-
-      btnShowPassword.addEventListener('click', () => {
-        passwordForm.style.display = passwordForm.style.display === 'none' ? 'block' : 'none';
-        passwordMessage.textContent = '';
-      });
-
-      passwordForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        passwordMessage.textContent = '';
-        const currentPassword = document.getElementById('currentPassword').value;
-        const newPassword = document.getElementById('newPassword').value;
-        if (newPassword.length < 8 || newPassword.length > 128) {
-          passwordMessage.textContent = 'Password must be at least 8 and maximum 128 characters long.';
-          passwordMessage.style.color = '#c0392b';
-          return;
-        }
-        try {
-          const res = await fetch('/api/change-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currentPassword, newPassword }),
-          });
-          const data = await res.json();
-          if (data.ok) {
-            passwordMessage.textContent = data.message || 'Password updated.';
-            passwordMessage.style.color = '#1b5e20';
-          } else {
-            if (res.status === 429) {
-              passwordMessage.textContent = 'Too Many Requests, Rate limit exceeded. Security Notice: Password reset attempts are limited to 5 requests per hour for security purposes.';
-            } else {
-              passwordMessage.textContent = data.message || 'Could not change password.';
-            }
-            passwordMessage.style.color = '#c0392b';
-          }
-        } catch (err) {
-          console.error(err);
-          passwordMessage.textContent = 'Server error while changing password.';
-          passwordMessage.style.color = '#c0392b';
-        }
       });
 
       btnLogout.addEventListener('click', async () => {
