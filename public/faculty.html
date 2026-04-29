@@ -5811,6 +5811,19 @@
             body: JSON.stringify(payload),
           });
           const data = await res.json().catch(() => ({}));
+          const msg = String((data && data.message) || '').trim();
+          if (!res.ok) {
+            if (res.status === 401) {
+              alert(msg || 'Session expired. Please sign in again.');
+              window.location.href = '/login';
+              return;
+            }
+            if (res.status === 403 && /student account cannot access faculty apis/i.test(msg)) {
+              alert('You are currently signed in as a student. Redirecting to student dashboard.');
+              window.location.href = '/student?denied=faculty';
+              return;
+            }
+          }
           if (data.ok) {
             currentSessionId = data.sessionId;
             currentSessionPaused = false;
@@ -5835,7 +5848,7 @@
             if (attendanceRefreshInterval) clearInterval(attendanceRefreshInterval);
             attendanceRefreshInterval = setInterval(loadAttendanceTableForCurrentSession, 5000);
           } else {
-            alert(data.message || 'Could not start session.');
+            alert(msg || 'Could not start session.');
           }
         } catch (err) {
           console.error(err);
