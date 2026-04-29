@@ -5812,6 +5812,11 @@
           });
           const data = await res.json().catch(() => ({}));
           const msg = String((data && data.message) || '').trim();
+          if (/please sign in/i.test(msg)) {
+            alert(msg || 'Session expired. Please sign in again.');
+            window.location.href = '/login';
+            return;
+          }
           if (!res.ok) {
             if (res.status === 401) {
               alert(msg || 'Session expired. Please sign in again.');
