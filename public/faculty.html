@@ -5797,7 +5797,7 @@
             credentials: 'include',
             body: JSON.stringify(payload),
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           if (data.ok) {
             currentSessionId = data.sessionId;
             currentSessionPaused = false;
@@ -5826,7 +5826,7 @@
           }
         } catch (err) {
           console.error(err);
-          alert('Server error while starting session.');
+          alert((err && err.message) ? err.message : 'Server error while starting session.');
         }
       });
 

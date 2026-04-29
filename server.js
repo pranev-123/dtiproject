@@ -2644,18 +2644,24 @@ function hasTwoStepVerifiedSession(req, expectedRole) {
 }
 
 function ensureAuthenticated(req, res, next) {
+  const isApi = String(req.path || '').startsWith('/api/');
   if (req.session && req.session.studentEmail && !req.session.userEmail) {
+    if (isApi) return res.status(403).json({ ok: false, message: 'Student account cannot access faculty APIs.' });
     return res.redirect('/student?denied=faculty');
   }
   if (req.session && req.session.userEmail) {
     if (!hasTwoStepVerifiedSession(req, 'faculty') && !hasTwoStepVerifiedSession(req, 'leadership')) {
-      req.session.destroy(() => res.redirect('/login'));
+      req.session.destroy(() => {
+        if (isApi) return res.status(401).json({ ok: false, message: 'Session expired. Please sign in again.' });
+        return res.redirect('/login');
+      });
       return;
     }
     const email = String(req.session.userEmail).trim().toLowerCase();
     const u = users[email];
     return next();
   }
+  if (isApi) return res.status(401).json({ ok: false, message: 'Please sign in to continue.' });
   return res.redirect('/login');
 }
 
@@ -2748,25 +2754,35 @@ function studentMayViewSessionRecording(studentReg, rec) {
 
 // Student dashboard: require student session; if not logged in as student, show student login (not faculty).
 function ensureStudentAuthenticated(req, res, next) {
+  const isApi = String(req.path || '').startsWith('/api/');
   if (req.session && req.session.studentEmail) {
     if (!hasTwoStepVerifiedSession(req, 'student')) {
-      req.session.destroy(() => res.redirect('/student/login'));
+      req.session.destroy(() => {
+        if (isApi) return res.status(401).json({ ok: false, message: 'Session expired. Please sign in again.' });
+        return res.redirect('/student/login');
+      });
       return;
     }
     const resolved = resolveStudentRecordFromSession(req);
     const rec = resolved && resolved.rec;
     return next();
   }
+  if (isApi) return res.status(401).json({ ok: false, message: 'Please sign in as student.' });
   return res.redirect('/student/login');
 }
 
 // Leadership-only: Principal, Directors, HoDs, Vice Principals (separate dashboard & login).
 function ensureLeadership(req, res, next) {
+  const isApi = String(req.path || '').startsWith('/api/');
   if (!req.session || !req.session.userEmail || !req.session.leadership) {
+    if (isApi) return res.status(401).json({ ok: false, message: 'Please sign in as leadership.' });
     return res.redirect('/leadership-login');
   }
   if (!hasTwoStepVerifiedSession(req, 'leadership')) {
-    req.session.destroy(() => res.redirect('/leadership-login'));
+    req.session.destroy(() => {
+      if (isApi) return res.status(401).json({ ok: false, message: 'Session expired. Please sign in again.' });
+      return res.redirect('/leadership-login');
+    });
     return;
   }
   const email = String(req.session.userEmail).trim().toLowerCase();
