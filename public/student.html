@@ -1090,6 +1090,7 @@
             <button type="button" class="student-profile-menu-item" id="studentProfileAiAutomationBtn">AI agent</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileCampusFeedBtn">Campus feed</button>
             <button type="button" class="student-profile-menu-item" id="studentProfileYoutubeViewerBtn">YouTube viewer</button>
+            <button type="button" class="student-profile-menu-item" id="studentProfileInnovationLabBtn">Innovation Lab</button>
             <button
               type="button"
               class="student-profile-menu-item dti-profile-open-innovation"
@@ -1753,6 +1754,7 @@
       const studentProfileAiAutomationBtn = document.getElementById('studentProfileAiAutomationBtn');
       const studentProfileCampusFeedBtn = document.getElementById('studentProfileCampusFeedBtn');
       const studentProfileYoutubeViewerBtn = document.getElementById('studentProfileYoutubeViewerBtn');
+      const studentProfileInnovationLabBtn = document.getElementById('studentProfileInnovationLabBtn');
       const studentProfileFirewallRoomBtn = document.getElementById('studentProfileFirewallRoomBtn');
       const studentProfileLogoutBtn = document.getElementById('studentProfileLogoutBtn');
       const studentProfileCircleInner = document.getElementById('studentProfileCircleInner');
@@ -5647,6 +5649,14 @@
           openStudentYoutubeModal();
         });
       }
+      if (studentProfileInnovationLabBtn) {
+        studentProfileInnovationLabBtn.addEventListener('click', function () {
+          closeStudentProfileDropdown();
+          if (typeof window.openStudentInnovationLab === 'function') {
+            window.openStudentInnovationLab();
+          }
+        });
+      }
 
       async function openCampusFeedPopup(opts) {
         const canPost = !!(opts && opts.canPost);
@@ -6597,6 +6607,10 @@
         function renderTimer() { if (timerEl) timerEl.textContent = 'Sprint timer: ' + fmt(nowElapsed()); if (timerToggle) timerToggle.textContent = ticking ? 'Pause' : 'Start'; }
         function startTick() { if (intId) clearInterval(intId); intId = setInterval(renderTimer, 500); }
         renderTimer(); startTick();
+        if (fab) fab.style.display = 'none';
+        window.openStudentInnovationLab = function () {
+          if (panel) panel.style.display = 'block';
+        };
         if (fab) fab.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
         if (closeBtn) closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
         if (notes) notes.addEventListener('input', () => { try { localStorage.setItem(storagePrefix + ':notes', notes.value || ''); } catch (_) {} });

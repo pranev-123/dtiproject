@@ -1487,6 +1487,9 @@
               <button type="button" class="profile-menu-item" id="profileAdminRegistrationsBtn" style="display:none;">
                 Admin registrations
               </button>
+              <button type="button" class="profile-menu-item" id="profileInnovationLabBtn">
+                Innovation Lab
+              </button>
               <button type="button" class="profile-menu-item dti-profile-open-innovation" id="profileInnovationBtn" role="menuitem">
                 AI Innovation
               </button>
@@ -2443,6 +2446,7 @@
       const profileAiAutomationBtn = document.getElementById('profileAiAutomationBtn');
       const profileCampusFeedBtn = document.getElementById('profileCampusFeedBtn');
       const profileAdminRegistrationsBtn = document.getElementById('profileAdminRegistrationsBtn');
+      const profileInnovationLabBtn = document.getElementById('profileInnovationLabBtn');
       const profileFirewallBtn = document.getElementById('profileFirewallBtn');
       const profileFirewallRoomBtn = document.getElementById('profileFirewallRoomBtn');
       const profileChangePasswordBtn = document.getElementById('profileChangePasswordBtn');
@@ -3104,6 +3108,14 @@
         profileAdminRegistrationsBtn.addEventListener('click', () => {
           closeProfileDropdown();
           window.location.href = '/admin/registrations';
+        });
+      }
+      if (profileInnovationLabBtn) {
+        profileInnovationLabBtn.addEventListener('click', () => {
+          closeProfileDropdown();
+          if (typeof window.openFacultyInnovationLab === 'function') {
+            window.openFacultyInnovationLab();
+          }
         });
       }
       if (profileFirewallBtn) {
@@ -6523,6 +6535,10 @@
         function renderTimer() { if (timerEl) timerEl.textContent = 'Focus timer: ' + fmt(nowElapsed()); if (timerToggle) timerToggle.textContent = ticking ? 'Pause' : 'Start'; }
         function startTick() { if (intId) clearInterval(intId); intId = setInterval(renderTimer, 500); }
         renderTimer(); startTick();
+        if (fab) fab.style.display = 'none';
+        window.openFacultyInnovationLab = function () {
+          if (panel) panel.style.display = 'block';
+        };
         if (fab) fab.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
         if (closeBtn) closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
         if (notes) notes.addEventListener('input', () => { try { localStorage.setItem(storagePrefix + ':notes', notes.value || ''); } catch (_) {} });
