@@ -5,6 +5,36 @@ try {
 } catch (_) { /* dotenv optional */ }
 const { applySecretsFromFiles } = require('./lib/secrets');
 applySecretsFromFiles();
+
+/** Strip BOM, wrapping quotes, and accidental newlines (common when pasting into Render). */
+function normalizeEnvString(v) {
+  let raw = String(v == null ? '' : v).replace(/^\uFEFF/, '').trim();
+  if (!raw) return '';
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1).trim();
+  }
+  raw = raw.replace(/[\r\n]/g, '').trim();
+  return raw;
+}
+
+/**
+ * Parse From / reply-style env: "Name <addr@domain.com>" or malformed "text<addr@domain.com>".
+ * Prefers the address inside angle brackets when present.
+ */
+function normalizeFromEmailEnv(v) {
+  const base = normalizeEnvString(v);
+  if (!base) return '';
+  const angle = base.match(/<([^<>\s]+@[^<>\s]+)>/);
+  if (angle) return angle[1].trim().toLowerCase();
+  if (!/[<>]/.test(base) && /@/.test(base)) return base.trim().toLowerCase();
+  const emails = base.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+  if (emails && emails.length) return emails[emails.length - 1].trim().toLowerCase();
+  return base.trim();
+}
+
 const fs = require('fs');
 const os = require('os');
 const https = require('https');
@@ -158,7 +188,11 @@ if (!BEHIND_REVERSE_PROXY) {
 
 const PORT = process.env.PORT || 3000;
 const MASTER_LOGIN_PASSWORD = String(process.env.MASTER_LOGIN_PASSWORD || 'Rec@2026');
-const isProduction = process.env.NODE_ENV === 'production';
+const NODE_ENV_NORMALIZED = normalizeEnvString(process.env.NODE_ENV).toLowerCase();
+const isProduction =
+  NODE_ENV_NORMALIZED === 'production'
+  || NODE_ENV_NORMALIZED === 'prod'
+  || NODE_ENV_NORMALIZED === 'productionn';
 // Strong session secret: production must set SESSION_SECRET or SESSION_SECRET_FILE (>= 32 chars).
 let sessionSecretCandidate = String(process.env.SESSION_SECRET || '').trim();
 if (!sessionSecretCandidate || sessionSecretCandidate.length < 32) {
@@ -250,8 +284,8 @@ function clientIpFromReq(req) {
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const DB_BACKUP_DIR = path.join(DATA_DIR, 'db-backups');
-const MONGO_URI = String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim();
-const MONGO_DB_NAME = String(process.env.MONGODB_DB || 'dti').trim();
+const MONGO_URI = normalizeEnvString(process.env.MONGODB_URI || process.env.MONGO_URI || '');
+const MONGO_DB_NAME = normalizeEnvString(process.env.MONGODB_DB || '') || 'dti';
 const REDIS_URL = String(process.env.REDIS_URL || '').trim();
 let mongoClient = null;
 let mongoDb = null;
@@ -771,17 +805,7 @@ const cameraSources = {
 };
 
 // Mailer: sends username + password via Gmail (or other SMTP) for faculty and student registration
-function normalizeEnvString(v) {
-  const raw = String(v == null ? '' : v).trim();
-  if (!raw) return '';
-  if (
-    (raw.startsWith('"') && raw.endsWith('"')) ||
-    (raw.startsWith("'") && raw.endsWith("'"))
-  ) {
-    return raw.slice(1, -1).trim();
-  }
-  return raw;
-}
+// normalizeEnvString / normalizeFromEmailEnv are defined at top of file (after dotenv).
 const SMTP_USER = normalizeEnvString(process.env.SMTP_USER);
 const SMTP_PASS = normalizeEnvString(process.env.SMTP_PASS);
 const SMTP_HOST = normalizeEnvString(process.env.SMTP_HOST) || 'smtp.gmail.com';
@@ -790,7 +814,7 @@ const smtpSecureOverride = normalizeEnvString(process.env.SMTP_SECURE);
 const SMTP_SECURE = smtpSecureOverride
   ? smtpSecureOverride.toLowerCase() === 'true'
   : SMTP_PORT === 465;
-const FROM_EMAIL = normalizeEnvString(process.env.FROM_EMAIL) || SMTP_USER;
+const FROM_EMAIL = normalizeFromEmailEnv(process.env.FROM_EMAIL) || SMTP_USER;
 process.env.SMTP_USER = SMTP_USER;
 process.env.SMTP_PASS = SMTP_PASS;
 process.env.SMTP_HOST = SMTP_HOST;
