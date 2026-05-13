@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "recai-4de2c-b81d4",
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

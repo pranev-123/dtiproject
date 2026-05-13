@@ -4,6 +4,7 @@
 node_modules/
 mongo-test.js
 data/db.json
+data/db-backups/
 data/*.pem
 data/od-proofs/
 data/od-verification-proofs/
