@@ -5873,11 +5873,14 @@
           const data = await res.json();
             if (data.ok) {
               const s = data.summary;
-              const emailMsg = data.emailSent
-                ? 'PDF report has been emailed to your official ID.'
-                : 'PDF report saved. Email was not sent.' + (data.emailError ? ' (' + data.emailError + ')' : ' (SMTP not configured)');
+              const emailed = !!(data.emailSent || data.emailQueued);
+              const emailMsg = data.emailQueued
+                ? 'The session report is being emailed to your official ID (may take a minute; check spam if needed).'
+                : data.emailSent
+                  ? 'PDF report has been emailed to your official ID.'
+                  : 'PDF report saved. Email was not sent.' + (data.emailError ? ' (' + data.emailError + ')' : ' (SMTP not configured)');
               liveAttentionText.textContent =
-                'Session ended. Average attention: ' + s.averageAttention + '%. ' + (data.emailSent ? 'Report emailed.' : 'Report saved; email not sent.');
+                'Session ended. Average attention: ' + s.averageAttention + '%. ' + (emailed ? 'Report email queued or sent.' : 'Report saved; email not sent.');
               alert('Session ended. ' + emailMsg);
               btnStartSession.disabled = false;
               btnEndSession.disabled = true;

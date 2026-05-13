@@ -811,6 +811,10 @@ const transporter = nodemailer.createTransport({
     : undefined,
 });
 
+// When true (default), email the faculty session report (PDFs + summary text) after each session ends.
+const SESSION_END_FACULTY_REPORT_EMAIL =
+  String(process.env.SESSION_END_FACULTY_REPORT_EMAIL ?? 'true').trim().toLowerCase() !== 'false';
+
 const PASSWORD_FORMAT_MODE = String(process.env.PASSWORD_FORMAT_MODE || 'fixed').trim().toLowerCase();
 const RANDOM_PASSWORD_LENGTH = Math.min(32, Math.max(10, Number(process.env.RANDOM_PASSWORD_LENGTH) || 14));
 const FACULTY_MIN_PASSWORD_LENGTH = Math.max(10, Math.min(64, Number(process.env.FACULTY_MIN_PASSWORD_LENGTH) || 12));
@@ -9586,6 +9590,88 @@ async function buildQuizPollResultsPdfBuffer(summary, quizRows, pollRows) {
   });
 }
 
+/** Email session-end report bundle to faculty (full send + compact retry). Uses buffer copies safe for background send. */
+async function sendFacultySessionEndReportEmailFromBuffers(payload) {
+  if (!smtpConfigured || !transporter || !payload) return;
+  const ownerEmail = String(payload.ownerEmail || '').trim().toLowerCase();
+  if (!ownerEmail) return;
+  const topicLabel = String(payload.summaryTopic || 'session').trim() || 'session';
+  const topicFile = topicLabel.replace(/\s+/g, '-');
+  const emailText = String(payload.emailText || '');
+  const pdfBuffer = payload.pdfBuffer;
+  const rankingPdfBuffer = payload.rankingPdfBuffer;
+  const quizPollPdfBuffer = payload.quizPollPdfBuffer;
+  const quizPollExcelBuffer = payload.quizPollExcelBuffer;
+  const thresholdCsv = payload.thresholdCsv;
+
+  const mailOptions = {
+    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+    to: ownerEmail,
+    subject: `Classroom Attention Report - ${topicLabel}`,
+    text: emailText,
+  };
+  if (pdfBuffer) {
+    mailOptions.attachments = [];
+    mailOptions.attachments.push({ filename: `attention-report-${topicFile}.pdf`, content: pdfBuffer });
+  }
+  if (rankingPdfBuffer) {
+    if (!mailOptions.attachments) mailOptions.attachments = [];
+    mailOptions.attachments.push({
+      filename: `student-ranking-last60s-${topicFile}.pdf`,
+      content: rankingPdfBuffer,
+    });
+  }
+  if (quizPollPdfBuffer) {
+    if (!mailOptions.attachments) mailOptions.attachments = [];
+    mailOptions.attachments.push({
+      filename: `quiz-poll-results-${topicFile}.pdf`,
+      content: quizPollPdfBuffer,
+    });
+  }
+  if (quizPollExcelBuffer) {
+    if (!mailOptions.attachments) mailOptions.attachments = [];
+    mailOptions.attachments.push({
+      filename: `quiz-poll-results-${topicFile}.xlsx`,
+      content: quizPollExcelBuffer,
+    });
+  }
+  if (thresholdCsv) {
+    if (!mailOptions.attachments) mailOptions.attachments = [];
+    mailOptions.attachments.push({
+      filename: `student-threshold-values-last60s-${topicFile}.csv`,
+      content: Buffer.from(thresholdCsv, 'utf8'),
+    });
+  }
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log('Session report email sent to', ownerEmail);
+  } catch (fullErr) {
+    console.error('Full report email failed, retrying with compact payload:', fullErr && fullErr.message ? fullErr.message : fullErr);
+    const compact = {
+      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+      to: ownerEmail,
+      subject: `Classroom Attention Report - ${topicLabel} (compact)`,
+      text: `${emailText}\n\nNote: Sent in compact mode to improve delivery reliability.`,
+      attachments: [],
+    };
+    if (pdfBuffer) {
+      compact.attachments.push({
+        filename: `attention-report-${topicFile}.pdf`,
+        content: pdfBuffer,
+      });
+    }
+    if (rankingPdfBuffer) {
+      compact.attachments.push({
+        filename: `student-ranking-last60s-${topicFile}.pdf`,
+        content: rankingPdfBuffer,
+      });
+    }
+    if (compact.attachments.length === 0) delete compact.attachments;
+    await transporter.sendMail(compact);
+    console.log('Session report compact email sent to', ownerEmail);
+  }
+}
+
 // Close session and generate summary + PDF report + email to faculty
 app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
   const { sessionId } = req.body;
@@ -9798,90 +9884,41 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
     quizPollExcelBuffer ? 'Quiz and poll results Excel file (with separate Quiz/Poll sheets) is attached.' : '',
   ].join('\n');
 
-  let emailSent = false;
+  const thresholdCsv = buildStudentThresholdCsv(studentThresholdRows);
+
+  let emailQueued = false;
   let emailError = null;
-  try {
-    if (smtpConfigured) {
-      const mailOptions = {
-        from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-        to: s.ownerEmail,
-        subject: `Classroom Attention Report - ${summary.topic}`,
-        text: emailText,
-      };
-      if (pdfBuffer) {
-        mailOptions.attachments = [];
-        mailOptions.attachments.push({ filename: `attention-report-${summary.topic.replace(/\s+/g, '-')}.pdf`, content: pdfBuffer });
-      }
-      if (rankingPdfBuffer) {
-        if (!mailOptions.attachments) mailOptions.attachments = [];
-        mailOptions.attachments.push({
-          filename: `student-ranking-last60s-${summary.topic.replace(/\s+/g, '-')}.pdf`,
-          content: rankingPdfBuffer,
-        });
-      }
-      if (quizPollPdfBuffer) {
-        if (!mailOptions.attachments) mailOptions.attachments = [];
-        mailOptions.attachments.push({
-          filename: `quiz-poll-results-${summary.topic.replace(/\s+/g, '-')}.pdf`,
-          content: quizPollPdfBuffer,
-        });
-      }
-      if (quizPollExcelBuffer) {
-        if (!mailOptions.attachments) mailOptions.attachments = [];
-        mailOptions.attachments.push({
-          filename: `quiz-poll-results-${summary.topic.replace(/\s+/g, '-')}.xlsx`,
-          content: quizPollExcelBuffer,
-        });
-      }
-      const thresholdCsv = buildStudentThresholdCsv(studentThresholdRows);
-      if (thresholdCsv) {
-        if (!mailOptions.attachments) mailOptions.attachments = [];
-        mailOptions.attachments.push({
-          filename: `student-threshold-values-last60s-${summary.topic.replace(/\s+/g, '-')}.csv`,
-          content: Buffer.from(thresholdCsv, 'utf8'),
-        });
-      }
-      try {
-        await transporter.sendMail(mailOptions);
-        emailSent = true;
-        console.log('Session report email sent to', s.ownerEmail);
-      } catch (fullErr) {
-        // Fallback: retry with lighter payload if provider rejects size/content.
-        console.error('Full report email failed, retrying with compact payload:', fullErr && fullErr.message ? fullErr.message : fullErr);
-        const compact = {
-          from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-          to: s.ownerEmail,
-          subject: `Classroom Attention Report - ${summary.topic} (compact)`,
-          text: emailText + '\n\nNote: Sent in compact mode to improve delivery reliability.',
-          attachments: [],
-        };
-        if (pdfBuffer) {
-          compact.attachments.push({
-            filename: `attention-report-${summary.topic.replace(/\s+/g, '-')}.pdf`,
-            content: pdfBuffer,
-          });
-        }
-        if (rankingPdfBuffer) {
-          compact.attachments.push({
-            filename: `student-ranking-last60s-${summary.topic.replace(/\s+/g, '-')}.pdf`,
-            content: rankingPdfBuffer,
-          });
-        }
-        if (compact.attachments.length === 0) delete compact.attachments;
-        await transporter.sendMail(compact);
-        emailSent = true;
-        console.log('Session report compact email sent to', s.ownerEmail);
-      }
-    } else {
-      console.log('Email skipped: SMTP not configured. Set SMTP_USER and SMTP_PASS (and optionally SMTP_HOST, SMTP_PORT) in environment.');
-      emailError = 'SMTP not configured';
-    }
-  } catch (err) {
-    console.error('Error sending email summary', err);
-    emailError = err.message || 'Email send failed';
+  if (!SESSION_END_FACULTY_REPORT_EMAIL) {
+    emailError = 'Session end report email disabled (SESSION_END_FACULTY_REPORT_EMAIL=false)';
+    console.log('Session report email skipped:', emailError);
+  } else if (!smtpConfigured) {
+    emailError = 'SMTP not configured';
+    console.log('Email skipped: SMTP not configured. Set SMTP_USER and SMTP_PASS (and optionally SMTP_HOST, SMTP_PORT) in environment.');
+  } else {
+    const ownerEmail = String(s.ownerEmail || '').trim().toLowerCase();
+    const mailPayload = {
+      ownerEmail,
+      summaryTopic: summary.topic,
+      emailText,
+      pdfBuffer: pdfBuffer ? Buffer.from(pdfBuffer) : null,
+      rankingPdfBuffer: rankingPdfBuffer ? Buffer.from(rankingPdfBuffer) : null,
+      quizPollPdfBuffer: quizPollPdfBuffer ? Buffer.from(quizPollPdfBuffer) : null,
+      quizPollExcelBuffer: quizPollExcelBuffer ? Buffer.from(quizPollExcelBuffer) : null,
+      thresholdCsv: thresholdCsv || '',
+    };
+    emailQueued = true;
+    runBackgroundTask('Faculty session end report email', async () => {
+      await sendFacultySessionEndReportEmailFromBuffers(mailPayload);
+    });
   }
 
-  return res.json({ ok: true, summary, emailSent, emailError });
+  return res.json({
+    ok: true,
+    summary,
+    emailSent: false,
+    emailQueued,
+    emailError,
+  });
 });
 
 // Get history of all sessions for this faculty
