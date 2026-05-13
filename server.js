@@ -798,11 +798,15 @@ process.env.SMTP_PORT = String(SMTP_PORT);
 if (FROM_EMAIL) process.env.FROM_EMAIL = FROM_EMAIL;
 const smtpConfigured = !!(SMTP_USER && SMTP_PASS);
 const isGmail = SMTP_HOST.toLowerCase().includes('gmail');
+const SMTP_CONNECTION_TIMEOUT_MS = Math.max(5000, Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 45000);
+const SMTP_SOCKET_TIMEOUT_MS = Math.max(10000, Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || 120000);
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: SMTP_SECURE,
   requireTLS: isGmail,
+  connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+  socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
   auth: smtpConfigured
     ? {
         user: SMTP_USER,
@@ -810,6 +814,29 @@ const transporter = nodemailer.createTransport({
       }
     : undefined,
 });
+
+/** Gmail SMTP generally rejects arbitrary From; use authenticated address when they differ. */
+function smtpMailFromAddress() {
+  const authUser = String(SMTP_USER || '').trim();
+  const fromAddr = String(FROM_EMAIL || '').trim() || authUser;
+  if (isGmail && authUser && fromAddr && fromAddr.toLowerCase() !== authUser.toLowerCase()) {
+    console.warn(
+      '[SMTP] FROM_EMAIL differs from SMTP_USER on a Gmail host; sending as SMTP_USER so Google accepts the message.',
+    );
+    return authUser;
+  }
+  return fromAddr || authUser;
+}
+
+function logSmtpFailure(context, err) {
+  const e = err || {};
+  console.error(`[SMTP] ${context}:`, e.message || err, {
+    code: e.code,
+    responseCode: e.responseCode,
+    response: e.response,
+    command: e.command,
+  });
+}
 
 // When true (default), email the faculty session report (PDFs + summary text) after each session ends.
 const SESSION_END_FACULTY_REPORT_EMAIL =
@@ -9590,22 +9617,34 @@ async function buildQuizPollResultsPdfBuffer(summary, quizRows, pollRows) {
   });
 }
 
-/** Email session-end report bundle to faculty (full send + compact retry). Uses buffer copies safe for background send. */
+function smtpAttachmentBuffer(buf) {
+  if (!buf) return null;
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  return b.length > 0 ? b : null;
+}
+
+/** Email session-end report bundle to faculty (full send → compact → text-only). Uses buffer copies safe for background send. */
 async function sendFacultySessionEndReportEmailFromBuffers(payload) {
   if (!smtpConfigured || !transporter || !payload) return;
   const ownerEmail = String(payload.ownerEmail || '').trim().toLowerCase();
   if (!ownerEmail) return;
   const topicLabel = String(payload.summaryTopic || 'session').trim() || 'session';
-  const topicFile = topicLabel.replace(/\s+/g, '-');
+  const topicFile = String(topicLabel)
+    .replace(/[/\\<>:"|?*]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 120);
   const emailText = String(payload.emailText || '');
-  const pdfBuffer = payload.pdfBuffer;
-  const rankingPdfBuffer = payload.rankingPdfBuffer;
-  const quizPollPdfBuffer = payload.quizPollPdfBuffer;
-  const quizPollExcelBuffer = payload.quizPollExcelBuffer;
-  const thresholdCsv = payload.thresholdCsv;
+  const pdfBuffer = smtpAttachmentBuffer(payload.pdfBuffer);
+  const rankingPdfBuffer = smtpAttachmentBuffer(payload.rankingPdfBuffer);
+  const quizPollPdfBuffer = smtpAttachmentBuffer(payload.quizPollPdfBuffer);
+  const quizPollExcelBuffer = smtpAttachmentBuffer(payload.quizPollExcelBuffer);
+  const thresholdCsv = String(payload.thresholdCsv || '').trim();
+
+  const fromAddr = smtpMailFromAddress();
 
   const mailOptions = {
-    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+    from: fromAddr,
     to: ownerEmail,
     subject: `Classroom Attention Report - ${topicLabel}`,
     text: emailText,
@@ -9644,11 +9683,14 @@ async function sendFacultySessionEndReportEmailFromBuffers(payload) {
   }
   try {
     await transporter.sendMail(mailOptions);
-    console.log('Session report email sent to', ownerEmail);
+    console.log('[SMTP] Session report email sent to', ownerEmail);
+    return;
   } catch (fullErr) {
-    console.error('Full report email failed, retrying with compact payload:', fullErr && fullErr.message ? fullErr.message : fullErr);
+    logSmtpFailure('session report (full attachments)', fullErr);
+  }
+  try {
     const compact = {
-      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+      from: fromAddr,
       to: ownerEmail,
       subject: `Classroom Attention Report - ${topicLabel} (compact)`,
       text: `${emailText}\n\nNote: Sent in compact mode to improve delivery reliability.`,
@@ -9668,7 +9710,22 @@ async function sendFacultySessionEndReportEmailFromBuffers(payload) {
     }
     if (compact.attachments.length === 0) delete compact.attachments;
     await transporter.sendMail(compact);
-    console.log('Session report compact email sent to', ownerEmail);
+    console.log('[SMTP] Session report compact email sent to', ownerEmail);
+    return;
+  } catch (compactErr) {
+    logSmtpFailure('session report (compact)', compactErr);
+  }
+  try {
+    await transporter.sendMail({
+      from: fromAddr,
+      to: ownerEmail,
+      subject: `Classroom Attention Report - ${topicLabel} (summary only)`,
+      text: `${emailText}\n\nNote: Attachments could not be delivered via your mail provider. Use Faculty dashboard → session history to download PDF reports if needed.`,
+    });
+    console.log('[SMTP] Session report text-only email sent to', ownerEmail);
+  } catch (textErr) {
+    logSmtpFailure('session report (text-only)', textErr);
+    throw textErr;
   }
 }
 
@@ -9900,10 +9957,10 @@ app.post('/api/session/end', ensureAuthenticated, async (req, res) => {
       ownerEmail,
       summaryTopic: summary.topic,
       emailText,
-      pdfBuffer: pdfBuffer ? Buffer.from(pdfBuffer) : null,
-      rankingPdfBuffer: rankingPdfBuffer ? Buffer.from(rankingPdfBuffer) : null,
-      quizPollPdfBuffer: quizPollPdfBuffer ? Buffer.from(quizPollPdfBuffer) : null,
-      quizPollExcelBuffer: quizPollExcelBuffer ? Buffer.from(quizPollExcelBuffer) : null,
+      pdfBuffer: pdfBuffer && pdfBuffer.length ? Buffer.from(pdfBuffer) : null,
+      rankingPdfBuffer: rankingPdfBuffer && rankingPdfBuffer.length ? Buffer.from(rankingPdfBuffer) : null,
+      quizPollPdfBuffer: quizPollPdfBuffer && quizPollPdfBuffer.length ? Buffer.from(quizPollPdfBuffer) : null,
+      quizPollExcelBuffer: quizPollExcelBuffer && quizPollExcelBuffer.length ? Buffer.from(quizPollExcelBuffer) : null,
       thresholdCsv: thresholdCsv || '',
     };
     emailQueued = true;
