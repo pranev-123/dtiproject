@@ -4790,6 +4790,7 @@
         { q: 'How do I improve attention?', a: null },
         { q: 'What does the pulse mean?', a: null },
         { q: 'What does the graph show?', a: null },
+        { q: 'What is the Digital Twin or zone insight?', a: null },
         { q: 'What is the Adaptive Teaching Coach?', a: null },
         { q: 'Teaching tips', a: null },
         { q: 'How does Smart Attendance work?', a: null },
@@ -4800,6 +4801,11 @@
         { q: 'How long is the attendance window?', a: null },
         { q: 'Why do students need HTTPS on phones for camera?', a: null },
         { q: 'Are classroom sessions encrypted?', a: null },
+        { q: 'What is the AI agent automation on this dashboard?', a: null },
+        { q: 'How do I attach a spreadsheet to the chat?', a: null },
+        { q: 'What voice commands can scroll or refresh the dashboard?', a: null },
+        { q: 'What is student stream zoom and auto face zoom?', a: null },
+        { q: 'Where is Support or Contact in the faculty dashboard?', a: null },
         { q: 'About Rajalakshmi Engineering College', a: null },
         { q: 'Where is REC located?', a: null },
         { q: 'What courses does REC offer?', a: null },
@@ -4816,8 +4822,8 @@
         const ctx = getChatContext();
         let t = (userText || '').toLowerCase().trim();
         t = t.replace(/\braja\s*lakshmi\b/gi, 'rajalakshmi').replace(/\br\s*e\s*c\b/gi, 'rec').replace(/\bour\s+e\s*c\b/gi, 'rec');
-        if (!t) return "You can ask about the Live Pulse, Smart Attendance, OD workflow, Adaptive Teaching Coach, encryption, or the college—or tap a FAQ below.";
-        if (/\b(help|hi|hello|hey)\b/.test(t)) return "Hi! I'm REC Smart Assist. I can explain the pulse, trend graph, Smart Attendance (hand-raise, OD, notebook), the Adaptive Teaching Coach, and Rajalakshmi Engineering College. What would you like to know?";
+        if (!t) return "You can ask about the Live Pulse, Digital Twin, Smart Attendance, OD workflow, Adaptive Teaching Coach, AI agent automation, chat file attachments, voice dashboard commands, student-stream zoom, Support, encryption, or the college—or tap a FAQ below.";
+        if (/\b(help|hi|hello|hey)\b/.test(t)) return "Hi! I'm REC Smart Assist. I can explain the pulse, trend graph, zone insight, Smart Attendance (hand-raise, OD, notebook), the Adaptive Teaching Coach, AI automation, attaching spreadsheets to chat, voice UI commands, and Rajalakshmi Engineering College. What would you like to know?";
         if (t.includes('about college') || t.includes('about the college') || t.includes('tell me about college') || t.includes('about rec') || t.includes('about rajalakshmi') || t.includes('what is rec') || t.includes('college info')) return "Rajalakshmi Engineering College (An Autonomous Institution) is a leading science and technology institution near Chennai. It focuses on excellence in engineering education, innovation, research and strong industry connections. For detailed information about vision, mission and governance, please refer to www.rajalakshmi.org.";
         if (/\b(lecture|how is my lecture|lecture quality|how.*lecture.*going)\b/.test(t)) return "Use the Live Teaching Pulse (average class attention) and the trend graph to see how the class is engaging. " + (ctx.pulseText ? "Right now: " + ctx.pulseText + "." : "Start a session to see live attention.");
         if (/\b(teaching tips?|prompts?|quick tips?)\b/.test(t)) return "When attention drops, try re-engaging the class: ask a quick question, pause and recap, or switch to an example. Use the prompts that appear on the dashboard when attention dips—they're based on real-time data.";
@@ -4827,21 +4833,27 @@
         if (/\b(prompt|suggestion|drop|alert)\b/.test(t)) return "When attention drops, the dashboard shows short prompts like \"Ask a quick question\" or \"Pause and recap.\" You can also turn on \"Alert sound when attention drops\" to get a soft beep without looking at the screen. Suggestions disappear automatically after a few seconds.";
         if (/\b(session|start|end|report|pdf)\b/.test(t)) return "Start a session with topic, venue, and times—then students open the student page to join. You can run multiple sessions and switch between them in Active sessions. When you end a session, a PDF report with the trend and pie chart is emailed to your official ID (if SMTP is set up).";
         if (/\b(adaptive teaching coach|teaching coach|coach panel)\b/.test(t)) return "The Adaptive Teaching Coach panel suggests evidence-based moves when attention dips—quick checks for understanding, pacing, and engagement. Use it alongside the Live Pulse and trend graph.";
+        if (/\b(digital twin|zone insight|heatmap|heat map|classroom zones)\b/.test(t)) return "The Digital Twin / zone-style view works with the Live Pulse to show where attention is clustering—use it for formative pacing (not grading). It complements the 60-second trend graph and teaching prompts.";
+        if (/\b(ai agent|automation|saved automation|run now|dashboard automation)\b/.test(t)) return "The AI agent (profile or automation panel) stores allowed dashboard actions—scroll to pulse or attendance, refresh tables, open notifications or Innovation—and runs them via the server when you click Run now or use matching voice commands. Check automation logs for what ran.";
+        if (/\b(attach|attachment|paperclip)\b/.test(t) && (/\b(chat|smart assist|assistant|spreadsheet|excel|xlsx|csv|file|sheet)\b/.test(t) || /\bto\s+chat\b/.test(t))) return "Use the paperclip in REC Smart Assist to attach .txt, .csv, .xls, or .xlsx files. A text excerpt is sent securely to the college AI so you can ask for summaries, checks, or teaching ideas from the sheet.";
+        if (/\b(voice command|voice commands|scroll to|refresh attendance|open innovation|open notifications)\b/.test(t)) return "Voice can trigger UI actions: open or close chat, show FAQs, notifications, Innovation Lab, scroll to session/pulse/attendance/camera, refresh sessions or attendance, start/end session (with validation), and student-stream zoom (zoom in/out, reset, auto face zoom). Anything else is answered like text chat.";
+        if (/\b(auto face zoom|face zoom|student stream zoom|zoom camera|zoom in|zoom out)\b/.test(t)) return "On the student stream, manual zoom and optional auto face zoom help you focus the live video for demos or large rooms. Voice supports zoom in, zoom out, reset view, and toggling auto face zoom when the stream is active.";
+        if (/\b(support|contact us|google form|help form)\b/.test(t)) return "Open your profile menu and choose Support / Contact us to reach the configured Google Form. Use it for access issues, product feedback, or college IT escalation.";
         if (/\b(notebook column|notebook in attendance|notebook present)\b/.test(t)) return "The Notebook column shows whether the student's device reported a visible notebook or book during the attendance window (when detection ran). Yes / No / — if unknown. It is a support signal, not a grade.";
         if (/\b(edit attendance|change attendance|10 minute|ten minute|after class start|lock attendance)\b/.test(t)) return "For integrity, you can edit Smart Attendance only within 10 minutes from when you started the class session on this dashboard. After that, edits are blocked—plan any corrections early.";
         if (/\b(od proof|od approval|leadership approval|ahod|hod|after.*approved|dual approval)\b/.test(t)) return "OD proofs go through Assistant HoD then HoD with verification and digital sign-off. The proof link appears in your attendance table only after both have approved. Students must match register and name to their login.";
         if (/\b(https|phone.*camera|mobile.*camera|student.*https|secure link)\b/.test(t)) return "Phones and many networks require HTTPS for camera access. Students should open the HTTPS link (often port 3443) your college provides and accept the certificate if it is self-signed.";
-        if (/\b(encrypt|encrypted|e2e|end.to.end|tls|secure.*session)\b/.test(t)) return "Traffic between browsers and your college server should use HTTPS (encryption in transit). Leadership messaging also highlights encrypted handling. Faculty AI chat uses server-side keys (Claude / Gemini)—do not paste secrets.";
+        if (/\b(encrypt|encrypted|e2e|end.to.end|tls|secure.*session)\b/.test(t)) return "Traffic between browsers and your college server should use HTTPS (encryption in transit). Leadership messaging also highlights encrypted handling. Faculty AI chat uses server-side keys (Claude, OpenAI, or Gemini when configured)—do not paste secrets.";
         if (/\b(smart attendance|hand.raise|hand raise|attendance.*work|how.*attendance)\b/.test(t)) return "Smart Attendance uses hand-raise detection. Students have 10 minutes from session start to raise their hand in front of the camera. The system detects the hand and marks them Present; otherwise Absent. OD uses uploaded proof after leadership approval. The table can show OD details and Notebook when reported. Extended phone or sleep signals may force Absent for the window.";
         if (/\b(web camera|webcam|usb camera)\b/.test(t)) return "The Web Camera button on the student dashboard lets students use a USB web camera instead of the built-in laptop camera. If multiple cameras are connected, they can select from a dropdown. This helps when the built-in camera has poor hand detection.";
         if (/\b(attendance.*(time|window|duration|period)|how long.*attendance|5 minutes|10 minutes|attendance.*minutes)\b/.test(t)) return "Students have 10 minutes from when you start the session to raise their hand for attendance. The Smart Attendance table refreshes every 5 seconds, so you will see their register numbers and status (Present/Absent/OD) appear as they complete the hand-raise.";
-        if (/\b(what can you|what do you|capabilities)\b/.test(t)) return "I can explain the Live Pulse, trend graph, Smart Attendance, OD workflow, Adaptive Teaching Coach, encryption and HTTPS tips, and Rajalakshmi Engineering College. Ask in plain language or tap a FAQ below.";
+        if (/\b(what can you|what do you|capabilities)\b/.test(t)) return "I can explain the Live Pulse, trend graph, Digital Twin, Smart Attendance, OD workflow, Adaptive Teaching Coach, AI agent automation, chat attachments, voice dashboard commands, student-stream zoom, Support, encryption and HTTPS tips, and Rajalakshmi Engineering College. Ask in plain language or tap a FAQ below.";
         if (/\b(where|location|address|place|situated)\b/.test(t) && /\b(rec|college|rajalakshmi|located|engineering|raja|lakshmi)\b/.test(t)) return "Rajalakshmi Engineering College is located at Thandalam, near Sriperumbudur, close to Chennai in Tamil Nadu, India. For campus maps, transport and directions, see the official website www.rajalakshmi.org.";
         if (/\b(course|programme|program|branch|department|degree)\b/.test(t)) return "REC offers a wide range of undergraduate and postgraduate programmes in engineering and technology across multiple departments (such as CSE, ECE, EEE, Mechanical, Civil and more). The current list of approved programmes and intake capacity is published on www.rajalakshmi.org.";
         if (/\b(autonomous|autonomy|affiliated|anna university)\b/.test(t)) return "Yes. Rajalakshmi Engineering College is an autonomous institution. Autonomous status allows the college to design its own curriculum and conduct examinations while remaining affiliated to the university. This supports innovation and relevance in teaching.";
         if (/\b(mascot|logo|aadhi|symbol)\b/.test(t)) return "REC's mascot represents the spirit of the college—dynamic and forward-looking. The 'R' with the torch on the mascot symbolizes knowledge and enlightenment. You can see the mascot in the branding area above this chat.";
         if (/\b(contact|email|phone|website)\b/.test(t)) return "For official contact details of Rajalakshmi Engineering College (website, email, phone), please visit the college's official website or use the contact information provided by your department.";
-        return "I'm not sure about that. Try: \"How do I improve attention?\", \"OD proof after leadership approval\", \"When can I edit attendance?\", \"Adaptive Teaching Coach\", or tap a FAQ above.";
+        return "I'm not sure about that. Try: \"How do I improve attention?\", \"Digital Twin\", \"AI agent automation\", \"Attach spreadsheet to chat\", \"Voice scroll to attendance\", \"OD proof after leadership approval\", \"When can I edit attendance?\", or tap a FAQ above.";
       }
       async function getAIResponse(userText) {
         try {
@@ -4911,7 +4923,7 @@
         chatInput.focus();
         if (!chatWelcomeShown) {
           chatWelcomeShown = true;
-          appendChatMessage('bot', "Hi! I'm REC Smart Assist. Ask about the pulse, Smart Attendance, OD workflow, Adaptive Teaching Coach, encryption or HTTPS—or tap a FAQ.");
+          appendChatMessage('bot', "Hi! I'm REC Smart Assist. Ask about the pulse, Digital Twin, Smart Attendance, OD workflow, Adaptive Teaching Coach, AI automation, chat attachments, voice commands, encryption or HTTPS—or tap a FAQ.");
         }
       }
       chatFab.addEventListener('click', (e) => {

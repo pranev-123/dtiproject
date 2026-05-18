@@ -2510,8 +2510,8 @@
       function leaderGetLocalResponse(text) {
         let t = (text || '').toLowerCase().trim();
         t = t.replace(/\braja\s*lakshmi\b/gi, 'rajalakshmi').replace(/\br\s*e\s*c\b/gi, 'rec').replace(/\s+/g, ' ');
-        if (!t) return 'I can help you read the leadership dashboard, understand attention metrics, and answer about the college.';
-        if (/\b(hi|hello|hey)\b/.test(t)) return "Hello, I am REC Insight. I can explain the leadership dashboard, attention metrics, and tell you about Rajalakshmi Engineering College.";
+        if (!t) return 'I can help you read the leadership dashboard, understand attention metrics, OD approvals, AI agent automation, chat attachments, Support, and the college.';
+        if (/\b(hi|hello|hey)\b/.test(t)) return "Hello, I am REC Insight. I can explain the leadership dashboard, attention metrics, OD queue, who sees department attendance, AI automation, attaching spreadsheets to chat, encryption, and Rajalakshmi Engineering College.";
         if (t.includes('total sessions') || t.includes('how many sessions')) {
           const el = document.getElementById('sumTotal');
           return 'Your current total sessions in this leadership view is ' + (el ? el.textContent : '—') + '.';
@@ -2529,10 +2529,13 @@
           return 'The OD proofs chip in the summary shows ' + (el ? el.textContent : '—') + ' OD-related items in your current leadership scope. Use the OD Approval Queue table for pending approvals and status.';
         }
         if (/\b(od approval|approval queue|ahod|hod.*od|pending od)\b/.test(t)) return 'The OD Approval Queue lists proofs that need Assistant HoD or HoD action. AHOD and HOD verify, upload verification where required, and digitally sign accept or reject. Faculty only see the proof link after both approvals.';
+        if (/\b(ai agent|automation|saved automation|run now|automation logs)\b/.test(t)) return 'The AI agent stores allowed dashboard actions for leadership (scroll to overview, sessions, OD queue, refresh data). Run now executes through the server; use automation logs to audit what ran.';
+        if (/\b(attach|attachment|paperclip)\b/.test(t) && (/\b(chat|insight|spreadsheet|excel|xlsx|csv|file)\b/.test(t))) return 'Use the paperclip in REC Insight to attach .txt, .csv, .xls, or .xlsx excerpts for the AI to analyse—useful for cross-checking exports with dashboard metrics.';
+        if (/\b(support|contact us|google form|help form)\b/.test(t)) return 'Open your profile menu and choose Support / Contact us to open the configured Google Form for leadership or IT follow-up.';
         if (/\b(department attendance|present absent|hod only|who sees attendance counts|principal.*attendance)\b/.test(t)) return 'Department-wise Present, Absent and OD counts are shown only to HoD and Assistant HoD. Principal, Director, Vice Principal, Dean and similar roles do not see those numbers—only the encrypted aggregate overview and sessions list as designed.';
         if (/\b(encrypt|e2e|end.to.end|https|tls|secure.*session)\b/.test(t)) return 'The leadership dashboard highlights that sessions are protected with encryption in transit (HTTPS) and secure handling on the server. Use the official HTTPS link your college provides when accessing from phones or remote networks.';
-        if (/\b(claude|gemini|ai insight|rec insight.*ai|powered by)\b/.test(t)) return 'REC Insight chat and voice can use the college AI service (Claude and Gemini) through a secure server proxy. API keys are not exposed in the browser; speak or type in English for best results.';
-        if (t.includes('how to use') || t.includes('how do i use') || t.includes('explain dashboard')) return 'Use the Overall engagement summary for totals, average attention, low-attention count and OD proofs. Recent sessions lists each class. HoD and AHOD also see Department Attendance counts; others do not. The OD Approval Queue handles duty proof workflow.';
+        if (/\b(claude|gemini|openai|ai insight|rec insight.*ai|powered by)\b/.test(t)) return 'REC Insight chat and voice can use the college AI service (Claude, OpenAI, or Gemini—whichever is configured) through a secure server proxy. API keys are not exposed in the browser; speak or type in English for best results.';
+        if (t.includes('how to use') || t.includes('how do i use') || t.includes('explain dashboard')) return 'Use the Overall engagement summary for totals, average attention, low-attention count and OD proofs. Recent sessions lists each class. HoD and AHOD also see Department Attendance counts; others do not. The OD Approval Queue handles duty proof workflow. Profile menu adds Support, AI agent automation, and Innovation where enabled.';
         if (t.includes('department') || t.includes('scope')) {
           const note = document.getElementById('leaderScopeNote');
           return 'This leadership view is limited to ' + (note ? note.textContent : 'your configured scope') + '. Department attendance numbers appear only for HoD and Assistant HoD. Other leadership accounts will see their own scope.';
@@ -2542,7 +2545,7 @@
         if (t.includes('autonomous') || t.includes('autonomy') || t.includes('affiliated')) return 'Yes. Rajalakshmi Engineering College is an autonomous institution. It can design its own curriculum and conduct examinations while remaining affiliated to the university.';
         if (/\b(attendance|hand.raise|smart attendance|how.*attendance)\b/.test(t)) return 'Smart Attendance uses hand-raise detection: students have 10 minutes to show their palm to the camera. OD uses uploaded proof approved by Assistant HoD then HoD before faculty see the link. Notebook and integrity signals may also be reported.';
         if (/\b(attendance.*(time|window|duration|period)|how long.*attendance|5 minutes|10 minutes|attendance timing)\b/.test(t)) return 'Students have 10 minutes from when the faculty starts the session to complete attendance by raising their hand for the camera. The attendance table refreshes every 5 seconds so faculty see Present, Absent, and OD status as students complete the hand-raise.';
-        return 'I may not know that yet. Try: total sessions, average attention, OD proofs count, OD approval queue, who sees department attendance, encryption, or how to read this dashboard.';
+        return 'I may not know that yet. Try: total sessions, average attention, OD proofs count, OD approval queue, AI agent automation, attach spreadsheet to chat, who sees department attendance, Support, encryption, or how to read this dashboard.';
       }
       async function leaderGetAIResponse(text) {
         try {
@@ -2561,7 +2564,10 @@
         'How does the OD Approval Queue work?',
         'Who can see department attendance Present Absent OD counts?',
         'Are sessions end-to-end encrypted?',
-        'How does REC Insight use Claude and Gemini?',
+        'What is the AI agent automation on this dashboard?',
+        'How do I attach a spreadsheet to REC Insight chat?',
+        'Where is Support or Contact for leadership?',
+        'How does REC Insight use Claude, OpenAI, and Gemini?',
         'How do I read this leadership dashboard?',
         'What is my leadership scope?',
         'How does attendance work?',
@@ -2627,7 +2633,7 @@
         leaderChatPanel.classList.add('open');
         if (leaderChatPopout) leaderChatPopout.classList.add('hidden');
         if (leaderChatMessages && !leaderChatMessages.dataset.welcomeShown) {
-          leaderAppendMessage('bot', 'Hi, I am REC Insight. Ask about attention metrics, OD approvals, who sees department attendance, encryption, or the college.');
+          leaderAppendMessage('bot', 'Hi, I am REC Insight. Ask about attention metrics, OD approvals, who sees department attendance, AI agent automation, chat attachments, Support, encryption, or the college.');
           leaderChatMessages.dataset.welcomeShown = '1';
         }
         leaderRenderFaqChips();

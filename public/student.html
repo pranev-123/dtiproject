@@ -2435,10 +2435,52 @@
             'Your connection to the college server should use HTTPS so data is encrypted in transit. Sensitive items like faculty passwords may use extra encryption on the server. REC EduMate AI replies are sent through the server using configured AI keys—do not share personal secrets in chat.',
         },
         {
-          id: 'ai-edumate',
-          patterns: ['claude', 'gemini', 'powered by', 'ai assistant', 'rec edumate', 'who answers'],
+          id: 'support-contact',
+          patterns: ['support', 'contact us', 'google form', 'help form', 'raise ticket', 'complaint', 'technical issue', 'report problem'],
           answer:
-            'REC EduMate can answer from built-in FAQs on your device and may call the college AI service (Claude and Gemini) for richer replies. API keys stay on the server; you only see the assistant text and hear English voice output when voice is enabled.',
+            'Open your profile menu (top right) and choose Support / Contact us. That opens the official Google Form your college configured so you can describe the issue and share contact details.',
+        },
+        {
+          id: 'resume-documents',
+          patterns: ['resume', 'cv', 'certificate', 'academic file', 'upload document', 'documents', 'file tools'],
+          answer:
+            'Use Profile → Resume & documents to upload your resume, certificate, and academic spreadsheet or PDF. Profile → File tools offers extra helpers. Downloads appear as links once the server has stored your files.',
+        },
+        {
+          id: 'innovation-lab',
+          patterns: ['innovation lab', 'innovation panel', 'what is innovation', 'dashboard innovation'],
+          answer:
+            'Innovation Lab (profile menu) summarises major dashboard areas—live session, attention, attendance, OD—with short explanations so you understand how each part fits together.',
+        },
+        {
+          id: 'ai-automation-student',
+          patterns: ['ai agent', 'automation', 'saved actions', 'run automation', 'dashboard automation'],
+          answer:
+            'Profile → AI agent lets you save or run automation that scrolls the dashboard, opens REC EduMate, or adjusts camera/streaming—useful for demos or accessibility. Actions are logged on the server for your account.',
+        },
+        {
+          id: 'chat-attachments',
+          patterns: ['attach file', 'attachment', 'upload spreadsheet', 'excel', 'xlsx', 'csv', 'summarize file'],
+          answer:
+            'In REC EduMate, use the paperclip to attach a .txt, .csv, .xls, or .xlsx file (excerpt is sent to the AI). Ask a clear question so the assistant can summarise or analyse the content.',
+        },
+        {
+          id: 'faculty-screenshare',
+          patterns: ['screen share', 'screenshare', 'faculty screen', 'presenter view', 'watch faculty screen'],
+          answer:
+            'When your faculty shares their screen for the class, a viewer can appear on your dashboard if the session supports it. It is live only—like your camera stream, it is not stored as a recording by this flow.',
+        },
+        {
+          id: 'subject-notes',
+          patterns: ['subject notes', 'topic notes', 'my notes', 'notes textarea', 'save notes'],
+          answer:
+            'Your subject topic notes are saved from the notes area on the dashboard (and from Profile → Subject topic notes). They are for your study use alongside the live session.',
+        },
+        {
+          id: 'ai-edumate',
+          patterns: ['claude', 'gemini', 'openai', 'powered by', 'ai assistant', 'rec edumate', 'who answers'],
+          answer:
+            'REC EduMate can answer from built-in FAQs on your device and may call the college AI service (Claude, OpenAI, or Gemini—whichever is configured) for richer replies. API keys stay on the server; you only see the assistant text and hear English voice output when voice is enabled.',
         },
       ];
 
@@ -2467,7 +2509,7 @@
       function findBestHelpAnswer(rawQuestion) {
         let q = normalizeVoiceTranscript ? normalizeVoiceTranscript(rawQuestion) : (rawQuestion || '').toLowerCase().trim();
         if (!q) {
-          return 'You can ask about privacy, attention score, hand-raise attendance, OD proof approval, phone or sleep detection, HTTPS for camera, learning modes, or anonymous doubts.';
+          return 'You can ask about privacy, attention score, hand-raise attendance, OD proof approval, phone or sleep detection, HTTPS for camera, learning modes, anonymous doubts, resume and documents, Support form, Innovation Lab, AI agent automation, or attaching spreadsheets to chat.';
         }
         if (/\bwhat is openai\b|\bopenai\b|\bchatgpt\b/.test(q)) {
           return 'OpenAI is an AI company that builds language models such as ChatGPT. These models can answer questions, explain concepts, write code, and help with many text-based tasks.';
@@ -2510,17 +2552,17 @@
           }
         });
         if (best && bestScore > 0) return best.answer;
-        return 'I can help with classroom topics and general questions too. Try: privacy, attention score, attendance, OD approval, camera issues, OpenAI/ChatGPT, Python, or ask your question in one short sentence.';
+        return 'I can help with classroom topics and general questions too. Try: privacy, attention score, attendance, OD approval, Support form, Innovation Lab, AI agent, file attachments, OpenAI/ChatGPT, Python, or ask your question in one short sentence.';
       }
 
       // Voice: trained only from chatbot helpFaqs (single source of truth). Uses normalized transcript for reliable speech-to-text matching.
       function findFAQAnswer(question) {
         const raw = (question || '').trim();
-        if (!raw) return 'I am still learning. Ask about privacy, attention, attendance, OD proof, phone or sleep detection, HTTPS, or anonymous doubts.';
+        if (!raw) return 'I am still learning. Ask about privacy, attention, attendance, OD proof, Support, Innovation Lab, AI agent, file attachments, HTTPS, or anonymous doubts.';
         const normalized = normalizeVoiceTranscript ? normalizeVoiceTranscript(raw) : raw.toLowerCase();
         const answer = findBestHelpAnswer(normalized);
         if (answer && !answer.startsWith('This assistant cannot')) return answer;
-        return 'I am still learning. You can ask about privacy, attention score, camera, learning modes, anonymous doubts, or about college.';
+        return 'I am still learning. You can ask about privacy, attention score, camera, learning modes, anonymous doubts, resume and documents, Support, or about college.';
       }
 
       function handleHelpQuestion(question) {
