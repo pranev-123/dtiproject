@@ -243,23 +243,29 @@
           <div class="field-select-wrap">
             <div class="field">
               <label for="designation">Designation</label>
-              <select id="designation" name="designation" size="1">
+              <select id="designation" name="designation" size="1" required>
                 <option value="">Select designation</option>
-                <option value="Principal">Principal</option>
-                <option value="Vice Principal">Vice Principal</option>
-                <option value="Director">Director</option>
-                <option value="Director (Alumni Affairs)">Director (Alumni Affairs)</option>
-                <option value="Dean (Academics)">Dean (Academics)</option>
-                <option value="Dean (Student Affairs)">Dean (Student Affairs)</option>
-                <option value="Dean">Dean</option>
-                <option value="Head Of Department">Head Of Department (HoD)</option>
-                <option value="Assistant Head Of Department">Assistant Head Of Department (Asst. HoD)</option>
-                <option value="Department Coordinator">Department Coordinator</option>
-                <option value="Assistant Professor">Assistant Professor</option>
-                <option value="Assistant Professor (SG)">Assistant Professor (SG)</option>
-                <option value="Professor">Professor</option>
-                <option value="Professor of practice">Professor of practice</option>
-                <option value="Admin">Admin</option>
+                <optgroup label="Leadership">
+                  <option value="Principal">Principal</option>
+                  <option value="Vice Principal">Vice Principal</option>
+                  <option value="Director">Director</option>
+                  <option value="Director (Alumni Affairs)">Director (Alumni Affairs)</option>
+                  <option value="Dean (Academics)">Dean (Academics)</option>
+                  <option value="Dean (Student Affairs)">Dean (Student Affairs)</option>
+                  <option value="Dean">Dean</option>
+                  <option value="Head Of Department">Head Of Department (HoD)</option>
+                  <option value="Assistant Head Of Department">Assistant Head Of Department (Asst. HoD)</option>
+                  <option value="Department Coordinator">Department Coordinator</option>
+                </optgroup>
+                <optgroup label="Administration">
+                  <option value="Admin">Admin (system administrator)</option>
+                </optgroup>
+                <optgroup label="Teaching">
+                  <option value="Assistant Professor">Assistant Professor</option>
+                  <option value="Assistant Professor (SG)">Assistant Professor (SG)</option>
+                  <option value="Professor">Professor</option>
+                  <option value="Professor of practice">Professor of practice</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -312,8 +318,8 @@
         const designation = document.getElementById('designation').value.trim();
         const mobile = document.getElementById('mobile').value.trim();
 
-        if (!email || !name || !staffId) {
-          errorText.textContent = 'Email, name and Staff ID are required.';
+        if (!email || !name || !staffId || !designation) {
+          errorText.textContent = 'Email, name, Staff ID and designation are required.';
           btnRegister.disabled = false;
           return;
         }

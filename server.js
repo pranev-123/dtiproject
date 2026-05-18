@@ -2746,7 +2746,14 @@ function ensureAuthenticated(req, res, next) {
 }
 
 function isAdminDesignation(designation) {
-  return String(designation || '').trim().toLowerCase() === 'admin';
+  const d = String(designation || '').trim().toLowerCase();
+  return (
+    d === 'admin' ||
+    d === 'administrator' ||
+    d === 'system administrator' ||
+    d === 'system admin' ||
+    d.startsWith('admin (')
+  );
 }
 
 function ensureAdmin(req, res, next) {
