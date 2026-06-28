@@ -52,23 +52,34 @@ async function processFile(srcPath, destPath) {
 
   if (ext === '.js') {
     const js = raw.toString('utf8');
-    const obfuscated = JavaScriptObfuscator.obfuscate(js, {
-      compact: true,
-      controlFlowFlattening: true,
-      controlFlowFlatteningThreshold: 0.25,
-      deadCodeInjection: false,
-      stringArray: true,
-      stringArrayThreshold: 0.75,
-      identifierNamesGenerator: 'hexadecimal',
-      transformObjectKeys: true,
-    }).getObfuscatedCode();
-    const terserOut = await minifyJs(obfuscated, {
-      compress: true,
-      mangle: true,
-      format: { comments: false },
-    });
-    await fsp.writeFile(destPath, terserOut.code || obfuscated, 'utf8');
-    return;
+    try {
+      const obfuscated = JavaScriptObfuscator.obfuscate(js, {
+        compact: true,
+        controlFlowFlattening: true,
+        controlFlowFlatteningThreshold: 0.25,
+        deadCodeInjection: false,
+        stringArray: true,
+        stringArrayThreshold: 0.75,
+        identifierNamesGenerator: 'hexadecimal',
+        transformObjectKeys: true,
+      }).getObfuscatedCode();
+      const terserOut = await minifyJs(obfuscated, {
+        compress: true,
+        mangle: true,
+        format: { comments: false },
+      });
+      await fsp.writeFile(destPath, terserOut.code || obfuscated, 'utf8');
+      return;
+    } catch (obfErr) {
+      // Fallback: minify only, or copy verbatim if minify also fails (e.g. ES modules with URL imports).
+      try {
+        const terserOut = await minifyJs(js, { compress: true, mangle: true, format: { comments: false } });
+        await fsp.writeFile(destPath, terserOut.code || js, 'utf8');
+      } catch (minErr) {
+        await fsp.copyFile(srcPath, destPath);
+      }
+      return;
+    }
   }
 
   await fsp.copyFile(srcPath, destPath);
