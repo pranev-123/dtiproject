@@ -914,7 +914,56 @@ function getInitialPasswordForRole(role, opts = {}) {
   return '';
 }
 
-function validateStrongFacultyPassword(pwd, userRec, emailRaw) {
+// Common weak passwords that should never be used even if they meet complexity rules.
+const COMMON_WEAK_PASSWORDS = new Set([
+  'password', 'password1', 'password123', 'passw0rd', 'p@ssw0rd', 'p@ssword',
+  '12345678', '123456789', '1234567890', '11111111', '00000000', 'abcd1234',
+  'qwerty123', 'qwertyuiop', 'letmein123', 'welcome123', 'admin123', 'changeme',
+  'iloveyou1', 'sunshine1', 'football1', 'baseball1', 'rec@2026', 'rec2026',
+]);
+
+// Keyboard row sequences (lowercase) used to detect keyboard-walk patterns.
+const KEYBOARD_SEQUENCES = [
+  'qwertyuiop', 'asdfghjkl', 'zxcvbnm', 'qazwsxedc', '1234567890',
+];
+
+/**
+ * Detect 3+ consecutive characters forming an alphabetical, numerical, or keyboard sequence.
+ * Case-insensitive; returns true if a sequence is found.
+ */
+function containsSequence(value) {
+  const v = String(value || '').toLowerCase();
+  // Alphabetical / numerical ascending or descending sequences of length >= 3.
+  for (let i = 0; i + 2 < v.length; i += 1) {
+    const a = v.charCodeAt(i);
+    const b = v.charCodeAt(i + 1);
+    const c = v.charCodeAt(i + 2);
+    const asc = a + 1 === b && b + 1 === c;
+    const desc = a - 1 === b && b - 1 === c;
+    if (asc || desc) return true;
+  }
+  // Keyboard-walk sequences of length >= 3.
+  for (const row of KEYBOARD_SEQUENCES) {
+    for (let i = 0; i + 3 <= row.length; i += 1) {
+      const frag = row.slice(i, i + 3);
+      if (v.includes(frag)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Detect 4+ repeated consecutive characters (e.g. aaaa, 1111, @@@@).
+ */
+function containsRepeats(value) {
+  return /(.)\1{3,}/.test(String(value || ''));
+}
+
+/**
+ * Strong password validator shared by faculty, leadership, and student change-password flows.
+ * Enforces length, complexity, personal-info exclusion, sequence/repeat detection, and common-password rejection.
+ */
+function validateStrongPassword(pwd, userRec, emailRaw) {
   const value = String(pwd || '');
   if (value.length < FACULTY_MIN_PASSWORD_LENGTH || value.length > 128) {
     return {
@@ -931,18 +980,39 @@ function validateStrongFacultyPassword(pwd, userRec, emailRaw) {
   const lowered = value.toLowerCase();
   const email = String(emailRaw || '').trim().toLowerCase();
   const localPart = email.includes('@') ? email.split('@')[0] : email;
-  const staffId = String((userRec && userRec.staffId) || '').trim().toLowerCase();
+  const staffId = String((userRec && (userRec.staffId || userRec.registerNumber)) || '').trim().toLowerCase();
   const name = String((userRec && userRec.name) || '').trim().toLowerCase();
   const namePieces = name.split(/\s+/).filter(Boolean);
   const bannedParts = [localPart, staffId].concat(namePieces).filter((x) => x && x.length >= 3);
   if (bannedParts.some((part) => lowered.includes(part))) {
     return {
       ok: false,
-      message: 'New password must not include your email name, staff ID, or personal name parts.',
+      message: 'New password must not include your email name, staff ID, register number, or personal name parts.',
+    };
+  }
+  if (containsSequence(value)) {
+    return {
+      ok: false,
+      message: 'New password must not contain 3+ consecutive sequential characters (e.g. ABC, 123, QWE, ASD).',
+    };
+  }
+  if (containsRepeats(value)) {
+    return {
+      ok: false,
+      message: 'New password must not contain 4+ repeated characters (e.g. aaaa, 1111).',
+    };
+  }
+  if (COMMON_WEAK_PASSWORDS.has(lowered)) {
+    return {
+      ok: false,
+      message: 'This password is too common. Choose a more unique password.',
     };
   }
   return { ok: true };
 }
+
+// Backward-compatible alias for existing call sites.
+const validateStrongFacultyPassword = validateStrongPassword;
 
 /**
  * Send login credentials email after registration.
@@ -2115,6 +2185,7 @@ app.use('/api/student-login/resend-otp', strictAuthLimiter);
 app.use('/api/leadership-login/resend-otp', strictAuthLimiter);
 app.use('/api/change-password', strictAuthLimiter);
 app.use('/api/student-change-password', strictAuthLimiter);
+app.use('/api/leadership-change-password', strictAuthLimiter);
 app.use('/api/firewall/login', strictAuthLimiter);
 
 function isTrustedRequestOrigin(req) {
@@ -4289,6 +4360,10 @@ app.post('/api/student-change-password', async (req, res) => {
   if (newPwd.length < 6 || newPwd.length > 32) {
     return res.status(400).json({ ok: false, message: 'New password must be 6–32 characters.' });
   }
+  const strongCheck = validateStrongPassword(newPwd, { registerNumber: reg, name: registered.name }, email);
+  if (!strongCheck.ok) {
+    return res.status(400).json({ ok: false, message: strongCheck.message });
+  }
   registered.hashedPassword = await bcrypt.hash(newPwd, BCRYPT_ROUNDS);
   registered.password = undefined;
   registered.firstLogin = false;
@@ -6347,6 +6422,40 @@ app.post('/api/change-password', ensureAuthenticated, async (req, res) => {
   user.password = undefined;
   user.firstLogin = false;
   // Persist updated faculty password.
+  saveDatabase();
+  return res.json({ ok: true, message: 'Password updated successfully.' });
+});
+
+app.post('/api/leadership-change-password', ensureLeadership, async (req, res) => {
+  const { currentPassword, newPassword, oldPassword } = req.body;
+  const current = String(oldPassword || currentPassword || '').trim();
+  const newPwd = String(newPassword || '').trim();
+  const email = req.session.userEmail;
+  const user = users[email];
+
+  if (!current || !newPwd) {
+    return res.status(400).json({ ok: false, message: 'Both current and new passwords are required.' });
+  }
+  if (!user) {
+    return res.status(403).json({ ok: false, message: 'Account not found.' });
+  }
+  let validCurrent = false;
+  if (user.hashedPassword) {
+    validCurrent = await bcrypt.compare(current, user.hashedPassword);
+  } else {
+    validCurrent = user.password === current;
+  }
+  if (!validCurrent) {
+    return res.status(401).json({ ok: false, message: 'Current password is incorrect.' });
+  }
+  const strong = validateStrongPassword(newPwd, user, email);
+  if (!strong.ok) {
+    return res.status(400).json({ ok: false, message: strong.message });
+  }
+
+  user.hashedPassword = await bcrypt.hash(newPwd, BCRYPT_ROUNDS);
+  user.password = undefined;
+  user.firstLogin = false;
   saveDatabase();
   return res.json({ ok: true, message: 'Password updated successfully.' });
 });
